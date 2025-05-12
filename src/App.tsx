@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import appLogo from '/favicon.svg';
+import Navbar from './components/Navbar.tsx';
 import PWABadge from './PWABadge.tsx';
 import Map from './components/Map.tsx';
 import './App.css';
@@ -39,21 +39,11 @@ function App() {
 
   return (
     <div className="app-container">
-      <header>
-        <div className="logo-container">
-          <img src={appLogo} className="logo" alt="OpenPCT PWA logo" />
-        </div>
-        {isInstallable && !isIOS && (
-          <button onClick={handleInstallClick} className="install-button">
-            Install
-          </button>
-        )}
-        {isIOS && (
-          <p className="ios-install-message">
-            To install, tap the Share button in Safari and select "Add to Home Screen".
-          </p>
-        )}
-      </header>
+      <Navbar
+        isInstallable={isInstallable}
+        isIOS={isIOS}
+        handleInstallClick={handleInstallClick}
+      />
       <main>
         <Map />
       </main>

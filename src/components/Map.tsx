@@ -4,6 +4,8 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import 'leaflet-draw';
 import 'leaflet-gpx';
+import './Map.css';
+
 
 // Configuration
 const USE_GEOJSON = true;
@@ -23,62 +25,58 @@ interface IconMap {
 
 const iconMap: IconMap = {
     'Water Source': L.icon({
-        iconUrl:
-            'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cGF0aCBmaWxsPSIjMDA1NmIzIiBmaWxsLW9wYWNpdHk9IjAiIGQ9Ik0xMiA1YzAgMCA1IDYgNSA5YzAgMi43NiAtMi4yNCA1IC01IDVjLTIuNzYgMCAtNSAtMi4yNCAtNSAtNWMwIC0zIDUgLTkgNSAtOVoiPjxhbmltYXRlIGZpbGw9ImZyZWV6ZSIgYXR0cmlidXRlTmFtZT0iZmlsbC1vcGFjaXR5IiBiZWdpbj0iMC40cyIgZHVyPSIwLjE1cyIgdmFsdWVzPSIwOzAuMyIvPjwvcGF0aD48ZyBmaWxsPSJub25lIiBzdHJva2U9IiMwMDU2YjMiIHN0cm9rZS1kYXNoYXJyYXk9IjIwIiBzdHJva2UtZGFzaG9mZnNldD0iMjAiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLXdpZHRoPSIyIj48cGF0aCBkPSJNMTIgNWMwIDAgNSA2IDUgOWMwIDIuNzYgLTIuMjQgNSAtNSA1Ij48YW5pbWF0ZSBmaWxsPSJmcmVlemUiIGF0dHJpYnV0ZU5hbWU9InN0cm9rZS1kYXNob2Zmc2V0IiBkdXI9IjAuNHMiIHZhbHVlcz0iMjA7MCIvPjwvcGF0aD48cGF0aCBkPSJNMTIgNWMwIDAgLTUgNiAtNSA5YzAgMi43NiAyLjI0IDUgNSA1Ij48YW5pbWF0ZSBmaWxsPSJmcmVlemUiIGF0dHJpYnV0ZU5hbWU9InN0cm9rZS1kYXNob2Zmc2V0IiBkdXI9IjAuNHMiIHZhbHVlcz0iMjA7MCIvPjwvcGF0aD48L2c+PC9zdmc+',
+        iconUrl: '/icons/water.svg',
+        className: 'icon-with-circle',
         iconSize: [24, 24],
-        iconAnchor: [12, 24],
         popupAnchor: [0, -24],
     }),
     'Trail Junction': L.icon({
-        iconUrl:
-            'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cGF0aCBmaWxsPSJub25lIiBzdHJva2U9IiM5MTkxOTEiIHN0cm9rZS13aWR0aD0iMiIgZD0ibTE3IDExbDUtNWwtNS01bTUgNWgtNGE2IDYgMCAwIDAtNiA2djEyTTcgNmwtNSA1bDUgNW0tNS01aDRhNiA2IDAgMCAxIDYgNnY3Ii8+PC9zdmc+',
+        iconUrl:'/icons/direction.svg',
+        className: 'icon-with-circle',
         iconSize: [24, 24],
-        iconAnchor: [12, 24],
         popupAnchor: [0, -24],
     }),
     'Paved Road': L.icon({
-        iconUrl:
-            'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1NzYiIGhlaWdodD0iNTEyIiB2aWV3Qm94PSIwIDAgNTc2IDUxMiI+PHBhdGggZmlsbD0iIzQyNDI0MiIgZD0iTTI1NiAzMmgtNzQuOGMtMjcuMSAwLTUxLjMgMTcuMS02MC4zIDQyLjZMMy4xIDQwNy4yYy0yIDUuOC0zLjEgMTItMy4xIDE4LjJDMCA0NTUuNSAyNC41IDQ4MCA1NC42IDQ4MEgyNTZ2LTY0YzAtMTcuNyAxNC4zLTMyIDMyLTMyczMzIDE0LjMgMzIgMzJ2NjRoMjAxLjRjMzAuMiAwIDU0LjYtMjQuNSA1NC42LTU0LjZjMC02LjItMS4xLTEyLjQtMy4xLTE4LjJMNDU1LjEgNzQuNkM0NDYgNDkuMSA0MjEuOSAzMiAzOTQuOCAzMkgzMjB2NjRjMCAxNy43LTE0LjMgMzItMzIgMzJzLTMyLTE0LjMtMzItMzJ6bTY0IDE5MnY2NGMwIDE3LjctMTQuMyAzMi0zMiAzMnMtMzItMTQuMy0zMi0zMnYtNjRjMC0xNy43IDE0LjMtMzIgMzItMzJzMzIgMT4LjMgMzIgMzIiLz48L3N2Zz4=',
+        iconUrl:'/icons/road.svg',
+        className: 'icon-with-circle',
         iconSize: [24, 24],
-        iconAnchor: [12, 24],
         popupAnchor: [0, -24],
     }),
-    Campground: L.icon({
-        iconUrl:
-            'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NDAiIGhlaWdodD0iNTEyIiB2aWV3Qm94PSIwIDAgNjQwIDUxMiI+PHBhdGggZmlsbD0iIzNjNjYzYyIgZD0iTTYyNCA0NDhoLTI0LjY4TDM1OS41NCAxMTcuNzVsNTMuNDEtNzMuNTVjNS4xOS03LjE1IDMuNjEtMTcuMTYtMy41NC0yMi4zNWwtMjUuOS0xOC43OWMtNy4xNS01LjE5LTE3LjE1LTMuNjEtMjIuMzUgMy41NUwzMjAgNjMuM0wyNzguODMgNi42Yy01LjE5LTcuMTUtMTUuMi04Ljc0LTIyLjM1LTMuNTVsLTI1Ljg4IDE4LjhjLTcuMTUgNS4xOS04Ljc0IDE1LjItMy41NCAyMi4zNWw1My40MSA3My41NUw0MC42OCA0NDhIMTZjLTguODQgMC0xNiA3LjE2LTE2IDE2djMyYzAgOC44NCA3LjE2IDE2IDE2IDE2aDYwOGM4Ljg0IDAgMTYtNy4xNiAxNi0xNnYtMzJjMC04Ljg0LTcuMTYtMTYtMTYtMTZNMzIwIDI4OGwxMTYuMzYgMTYwSDIwMy42NHoiLz48L3N2Zz4=',
+    'Unpaved Road': L.icon({
+        iconUrl:'/icons/road.svg',
+        className: 'icon-with-circle',
         iconSize: [24, 24],
-        iconAnchor: [12, 24],
+        popupAnchor: [0, -24],
+    }),
+    'Established Campsite': L.icon({
+        iconUrl:'/icons/tent.svg',
+        className: 'icon-with-circle',
+        iconSize: [24, 24],
         popupAnchor: [0, -24],
     }),
     'Undeveloped Campsite': L.icon({
-        iconUrl:
-            'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cGF0aCBmaWxsPSIjNWU1MTNmIiBkPSJtMTUuOSAxOC41bDYgMS42bC0uNCAxLjlsLTkuNC0yLjVMMi43IDIybC0uNS0xLjlsNi0xLjZsLTYuMS0xLjZsLjUtMS45bDkuNCAyLjVsOS40LTIuNWwuNSAxLjl6bS4xNy0xMC41OGMtLjE2LS4yMi0uMzYtLjQyLS41Ny0uNTljLS40NS0uNDMtMS0uNzQtMS40NC0xLjJDMTMgNS4wOCAxMi43OSAzLjM0IDEzLjQ0IDJjLS42NS4xNy0xLjI2LjU0LTEuNzcuOTVDOS44NCA0LjQ2IDkuMTEgNy4xIDEwIDkuMzhjMCAuMDcuMDQuMTUuMDQuMjRjMCAuMTYtLjExLjMtLjI1LjM4YS41MS41MSAwIDAgMS0uNTctLjIzYy0uOC0xLjAzLS45My0yLjUxLS4zOC0zLjdjLTEuMTkuOTktMS44NCAyLjY1LTEuNzMgNC4yMmMuMDIuMzYuMDcuNzEuMTkgMS4wN2MuMTEuNDQuMjkuODcuNTIgMS4yNWMuNzUgMS4yNSAyLjA4IDIuMTUgMy41IDIuMzNjMS41Mi4yIDMuMTQtLjA5IDQuMzEtMS1xY2ljZmY0MS4zLTEuMiAxLjc3LTMuMTIgMS4wOC00LjY5bC0uMS0uMTdxLS4yMS0uNDk1LS41Ny0uOXptLTIuMjQgNC41NWMtLjIuMTgtLjUyLjM2LS43OC40NGMtLjc5LjI4LTEuNTktLjEyLTIuMDUtLjZjLjg0LS4yIDEuMzQtLjg0IDEuNS0xLjQ4Yy4xMS0uNTgtLjExLTEuMDUtLjIxLTEuNjFjLS4wOC0uNTMtLjA3LS45OS4xMy0xLjQ5Yy4xMy4yNy4yNy41NS40NC43N2MuNTUuNzIgMS40MSAxLjA0IDEuNTkgMmMuMDIuMTMuMDUuMjIuMDUuMzNjMCAuNi0uMjQgMS4yNC0uNjggMS42NCIvPjwvc3ZnPg==',
+        iconUrl:'/icons/fire.svg',
+        className: 'icon-with-circle',
         iconSize: [24, 24],
-        iconAnchor: [12, 24],
         popupAnchor: [0, -24],
     }),
-    Resupply: L.icon({
-        iconUrl:
-            'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cGF0aCBmaWxsPSJjdXJyZW50Q29sb3IiIGQ9Ik0xOSAxNWgtMnYtMmgybTAgNmgtMnYtMmgyTTEzIDdoLTJWNWgybTAgNmgtMlY5aDJtMCA2aC0ydi0yaDJtMCA2aC0ydi0yaDJtLTYtNkg1VjloMm0wIDZINXYtMmgybTAgNkg1di0yaDJtOC02VjVsLTMtM2wtMyAzdjJIM3YxNGgxOFYxMXoiLz48L3N2Zz4=',
+    'Resupply': L.icon({
+        iconUrl:'/icons/city.svg',
+        className: 'icon-with-circle',
         iconSize: [24, 24],
-        iconAnchor: [12, 24],
         popupAnchor: [0, -24],
     }),
-    Landmark: L.icon({
-        iconUrl:
-            'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cGF0aCBmaWxsPSIjMzM0ZjJiIiBkPSJNNSAyMVY0aDlsLjQgMkgyMHYxMGgtN2wtLjQtMkg3djd6Ii8+PC9zdmc+',
+    'Landmark': L.icon({
+        iconUrl:'/icons/flag.svg',
+        className: 'icon-with-circle',
         iconSize: [24, 24],
-        iconAnchor: [12, 24],
         popupAnchor: [0, -24],
     }),
-    default: L.icon({
-        iconUrl:
-            'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI4IDI0Ij48cGF0aCBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLXdpZHRoPSIyIiBkPSJNOCAxMmE0IDQgMCAxIDAgOCAwYTQgNCAwIDEgMC04IDAiLz48L3N2Zz4=',
-        iconRetinaUrl:
-            'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZWRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI4IDI0Ij48cGF0aCBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLXdpZHRoPSIyIiBkPSJNOCAxMmE0IDQgMCAxIDAgOCAwYTQgNCAwIDEgMC04IDAiLz48L3N2Zz4=',
-        iconSize: [25, 41],
-        iconAnchor: [12, 41],
-        popupAnchor: [1, -34],
+    'default': L.icon({
+        iconUrl:'/icons/point.svg',
+        className: 'icon-with-circle',
+        iconSize: [24, 24],
+        popupAnchor: [0, -24],
     }),
 };
 
@@ -105,7 +103,7 @@ const fetchWeatherData = async (lat: number, lon: number): Promise<string> => {
 
     try {
         const pointsResponse = await fetch(`https://api.weather.gov/points/${lat},${lon}`, {
-            headers: { 'User-Agent': 'GrokMapApp/1.0 (contact: example@example.com)' },
+            headers: { 'User-Agent': 'OpenPCT/1.0 (contact: example@example.com)' },
         });
         if (!pointsResponse.ok) throw new Error(`Points API error: ${pointsResponse.status}`);
         const pointsData = await pointsResponse.json();
@@ -113,7 +111,7 @@ const fetchWeatherData = async (lat: number, lon: number): Promise<string> => {
         if (!forecastUrl) throw new Error('No forecast URL found');
 
         const forecastResponse = await fetch(forecastUrl, {
-            headers: { 'User-Agent': 'GrokMapApp/1.0 (contact: example@example.com)' },
+            headers: { 'User-Agent': 'OpenPCT/1.0 (contact: example@example.com)' },
         });
         if (!forecastResponse.ok) throw new Error(`Forecast API error: ${forecastResponse.status}`);
         const forecastData = await forecastResponse.json();
@@ -158,6 +156,7 @@ interface CustomMarker extends Marker {
     note?: string;
 }
 
+
 // LayersControl
 interface LayersControlOptions extends ControlOptions {
     baseLayers: { [key: string]: L.TileLayer };
@@ -174,10 +173,9 @@ const LayersControl = Control.extend({
         const button = L.DomUtil.create('div', 'leaflet-control-layers-toggle', container);
         button.style.width = '32px';
         button.style.height = '30px';
-        button.style.backgroundImage =
-            "url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjOTE5MTkxIiBkPSJtMTIgMjEuMDVsLTktN2wxLjY1LTEuMjVMMTIgMTguNWw3LjM1LTUuN0wyMSAxNC4wNXpNMTIgMTZMMyA5bDktN2w5IDd6Ii8+PC9zdmc+')";
+        button.style.backgroundImage = "url('/icons/layers.svg')";
         button.style.cursor = 'pointer';
-        button.style.border = '1px solid #8AADB9';
+        // button.style.border = '1px solid #8AADB9';
         button.style.borderRadius = '2px';
 
         const dropdown = L.DomUtil.create('div', 'leaflet-control-layers-expanded', container);
@@ -187,7 +185,7 @@ const LayersControl = Control.extend({
         dropdown.style.fontSize = '14px';
         dropdown.style.lineHeight = '1.5';
         dropdown.style.backgroundColor = '#fff';
-        dropdown.style.border = '1px solid #8AADB9';
+        dropdown.style.border = '2px solid rgba(60, 60, 60, 0.5)';
         dropdown.style.borderRadius = '4px';
         dropdown.style.display = 'none';
         dropdown.style.position = 'absolute';
@@ -264,15 +262,16 @@ const LocationControl = Control.extend({
         container.style.height = '30px';
         container.style.marginBottom = '2px';
         container.style.backgroundColor = '#fff';
-        container.style.border = '1px solid #8AADB9';
-        container.style.borderRadius = '4px';
+        // container.style.border = '2px solid rgba(60, 60, 60, 0.5)';
+        // container.style.borderRadius = '4px';
         container.style.cursor = 'pointer';
 
         const button = L.DomUtil.create('div', '', container);
         button.style.width = '32px';
         button.style.height = '30px';
-        button.style.backgroundImage =
-            "url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48ZyBmaWxsPSJub25lIiBzdHJva2U9IiM5MTkxOTEiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLXdpZHRoPSIyIj48cGF0aCBkPSJNMiAxMmgzbTE0IDBoM00xMiAydjNtMCAxNHYzIi8+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iNyIvPjwvZz48L3N2Zz4=')";
+        button.style.backgroundImage ="url('/icons/location.svg')";
+        button.style.border = '2px solid rgba(60, 60, 60, 0.5)';
+        button.style.borderRadius = '2px';
         button.style.backgroundSize = '24px 24px';
         button.style.backgroundPosition = 'center';
         button.style.backgroundRepeat = 'no-repeat';
@@ -345,15 +344,16 @@ const NoteControl = Control.extend({
         container.style.height = '30px';
         container.style.marginBottom = '2px';
         container.style.backgroundColor = '#fff';
-        container.style.border = '1px solid #8AADB9';
-        container.style.borderRadius = '4px';
+        // container.style.border = '2px solid rgba(60, 60, 60, 0.5)';
+        // container.style.borderRadius = '4px';
         container.style.cursor = 'pointer';
 
         const button = L.DomUtil.create('div', '', container);
         button.style.width = '32px';
         button.style.height = '30px';
-        button.style.backgroundImage =
-            "url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjOTE5MTkxIiBkPSJNNiAxNGgxMnYtMkg2em0wLTNoMTJWOUg2em0wLTNoMTJWNkg2ek00IDE4cS0uODI1IDAtMS40MTItLjU4N1QyIDE2VjRxMC0uODI1LjU4OC0xLjQxMlQ0IDJoMTZxLjgyNSAwIDEuNDEzLjU4OFQyMiA0djE4bC00LTR6Ii8+PC9zdmc+')";
+        button.style.backgroundImage ="url('/icons/comment.svg')";
+        button.style.border = '2px solid rgba(60, 60, 60, 0.5)';
+        button.style.borderRadius = '2px';
         button.style.backgroundSize = '20px 20px';
         button.style.backgroundPosition = 'center';
         button.style.backgroundRepeat = 'no-repeat';
@@ -365,7 +365,6 @@ const NoteControl = Control.extend({
             noteMode = !noteMode;
             button.style.backgroundColor = noteMode ? '#e0e0e0' : '#fff';
             map.getContainer().style.cursor = noteMode ? 'pointer' : 'grab';
-            if (noteMode) alert('Click on the map to add a new waypoint with a note.');
         });
 
         map.on('click', (e: L.LeafletMouseEvent) => {
@@ -415,15 +414,16 @@ const QueryFeaturesControl = Control.extend({
         container.style.height = '30px';
         container.style.marginBottom = '2px';
         container.style.backgroundColor = '#fff';
-        container.style.border = '1px solid #8AADB9';
-        container.style.borderRadius = '4px';
+        // container.style.border = '2px solid rgba(60, 60, 60, 0.5)';
+        // container.style.borderRadius = '4px';
         container.style.cursor = 'pointer';
 
         const button = L.DomUtil.create('div', '', container);
         button.style.width = '32px';
         button.style.height = '30px';
-        button.style.backgroundImage =
-            "url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjOTE5MTkxIiBkPSJtMTkuNiAyMWwtNi4zLTYuM3EtLjc1LjYtMS43MjUuOTVUOS41IDE2cS0yLjcyNSAwLTQuNjEyLTEuODg4VDMgOS41dDEuODg4LTQuNjEyVDkuNSAzdDQuNjEzIDEuODg4VDE2IDkuNXEwIDEuMS0uMzUgMi4wNzVUMTQuNyAxMy4zbDYuMyA2LjN6TTkuNSAxNHExLjg3NSAwIDMuMTg4LTEuMzEyVDE0IDkuNXQtMS4zMTItMy4xODdUOS41IDVUNi4zMTMgNi4zMTNUNSA5LjV0MS4zMTMgMy4xODhUOS41IDE0Ii8+PC9zdmc+')";
+        button.style.backgroundImage ="url('/icons/search.svg')";
+        button.style.borderRadius = '2px';
+        button.style.border = '2px solid rgba(60, 60, 60, 0.5)';
         button.style.backgroundSize = '20px 20px';
         button.style.backgroundPosition = 'center';
         button.style.backgroundRepeat = 'no-repeat';
@@ -435,7 +435,6 @@ const QueryFeaturesControl = Control.extend({
             queryMode = !queryMode;
             button.style.backgroundColor = queryMode ? '#e0e0e0' : '#fff';
             map.getContainer().style.cursor = queryMode ? 'pointer' : 'grab';
-            if (queryMode) alert('Click on the map to find nearby features.');
         });
 
         map.on('click', async (e: L.LeafletMouseEvent) => {
@@ -453,7 +452,7 @@ const QueryFeaturesControl = Control.extend({
                 try {
                     const response = await fetch(
                         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${e.latlng.lat}&lon=${e.latlng.lng}&zoom=18&addressdetails=1`,
-                        { headers: { 'User-Agent': 'GrokMapApp/1.0 (contact: example@example.com)' } }
+                        { headers: { 'User-Agent': 'OpenPCT/1.0 (contact: example@example.com)' } }
                     );
                     if (!response.ok) throw new Error(`HTTP error ${response.status}`);
                     const data = await response.json();
@@ -510,9 +509,11 @@ const LoadMapControl = Control.extend({
         container.style.height = '30px';
         container.style.marginBottom = '2px';
         container.style.backgroundColor = '#fff';
-        container.style.border = '1px solid #8AADB9';
-        container.style.borderRadius = '4px';
+        // container.style.border = '2px solid rgba(60, 60, 60, 0.5)';
+        // container.style.borderRadius = '4px';
         container.style.cursor = 'pointer';
+        container.style.top = '50px';
+
 
         const button = L.DomUtil.create('div', '', container);
         button.style.width = '72px';
@@ -521,6 +522,8 @@ const LoadMapControl = Control.extend({
         button.style.alignItems = 'center';
         button.style.justifyContent = 'center';
         button.style.fontFamily = 'Arial, sans-serif';
+        button.style.border = '2px solid rgba(60, 60, 60, 0.5)';
+        button.style.borderRadius = '2px';
         button.style.fontSize = '12px';
         button.style.color = '#333';
         button.textContent = 'Load Data';
@@ -532,7 +535,7 @@ const LoadMapControl = Control.extend({
         dropdown.style.fontSize = '14px';
         dropdown.style.lineHeight = '1.5';
         dropdown.style.backgroundColor = '#fff';
-        dropdown.style.border = '1px solid #8AADB9';
+        dropdown.style.border = '2px solid rgba(60, 60, 60, 0.5)';
         dropdown.style.borderRadius = '4px';
         dropdown.style.display = 'none';
         dropdown.style.position = 'absolute';

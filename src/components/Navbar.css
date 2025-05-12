@@ -1,0 +1,66 @@
+.navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  background-color: rgba(248, 248, 248, 0.8); /* Semi-transparent background */
+  border-bottom: 1px solid rgba(221, 221, 221, 0.5);
+  width: 100%;
+  box-sizing: border-box;
+  height: 40px; /* Fixed height for consistency */
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1000; /* Above Leaflet map (z-index ~400) */
+}
+
+.logo-container {
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+.logo {
+  height: auto;
+  width: 80px;
+  margin-right: 10px;
+}
+
+.navbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px; /* Space between buttons/messages */
+}
+
+.install-button {
+  /* background-color: #fff; */
+  color: #000;
+  border: 2px solid rgba(60, 60, 60, 0.5);
+  border-radius: 2px;
+  padding: 2px 2px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.install-button:hover {
+  background-color: rgba(106, 106, 106, 0.68);
+}
+
+.ios-install-message {
+  font-size: 12px;
+  color: #007aff;
+  margin: 0;
+  max-width: 200px; /* Prevent overflow on small screens */
+}
+
+/* Responsive adjustments */
+@media (min-width: 768px) {
+  .install-button {
+    font-size: 16px;
+    padding: 10px 20px;
+  }
+
+  .ios-install-message {
+    font-size: 14px;
+  }
+}

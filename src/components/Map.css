@@ -1,0 +1,18 @@
+.leaflet-control-zoom {
+    margin-top: 50px !important; /* Shift zoom buttons 50px down from topright */
+}
+
+.icon-with-circle {
+    background-color: rgba(255, 255, 255, 0.9); /* White with 70% opacity */
+    border-radius: 50%; /* Circular shape */
+    padding: 6px; /* Space between icon and circle edge */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.4); /* Optional: subtle shadow for depth */
+}
+
+.icon-with-circle:hover {
+    background-color: rgba(255, 255, 255, 1);
+    box-shadow: 0 0 4px rgba(0, 0, 0, 1);
+}

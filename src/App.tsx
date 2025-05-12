@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
-import reactLogo from './assets/react.svg';
 import appLogo from '/favicon.svg';
 import PWABadge from './PWABadge.tsx';
+import Map from './components/Map.tsx';
 import './App.css';
 
 function App() {
-  const [count, setCount] = useState(0);
   const [deferredPrompt, setDeferredPrompt] = useState<Event | null>(null);
   const [isInstallable, setIsInstallable] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
@@ -39,39 +38,27 @@ function App() {
   };
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={appLogo} className="logo" alt="openpct-pwa logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>openpct-pwa</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
+    <div className="app-container">
+      <header>
+        <div className="logo-container">
+          <img src={appLogo} className="logo" alt="OpenPCT PWA logo" />
+        </div>
         {isInstallable && !isIOS && (
-          <button onClick={handleInstallClick} style={{ marginTop: '10px' }}>
-            Install OpenPCT
+          <button onClick={handleInstallClick} className="install-button">
+            Install
           </button>
         )}
         {isIOS && (
-          <p style={{ marginTop: '10px', color: '#007aff' }}>
+          <p className="ios-install-message">
             To install, tap the Share button in Safari and select "Add to Home Screen".
           </p>
         )}
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
+      </header>
+      <main>
+        <Map />
+      </main>
       <PWABadge />
-    </>
+    </div>
   );
 }
 

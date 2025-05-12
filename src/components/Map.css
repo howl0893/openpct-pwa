@@ -2,6 +2,10 @@
     margin-top: 50px !important; /* Shift zoom buttons 50px down from topright */
 }
 
+.user-location-icon {
+    transform-origin: center;
+}
+
 .icon-with-circle {
     background-color: rgba(255, 255, 255, 0.9); /* White with 70% opacity */
     border-radius: 50%; /* Circular shape */

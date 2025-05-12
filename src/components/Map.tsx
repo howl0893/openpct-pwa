@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
-import L, { Control, ControlOptions, Icon, Map as LeafletMap, Marker } from 'leaflet';
+import L, { Control, ControlOptions, Icon, Map as LeafletMap, Marker, LatLng } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import 'leaflet-draw';
-import 'leaflet-gpx';
+import {GPX} from 'leaflet-gpx';
 import './Map.css';
-
 
 // Configuration
 const USE_GEOJSON = true;
+const POLL_INTERVAL = 3000; // Poll GPS every 5 seconds
+const HEADING_THRESHOLD = 1; // Minimum heading change (degrees) to update marker
 
 // Fix Leaflet default marker icon issue
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -18,7 +19,7 @@ L.Icon.Default.mergeOptions({
     shadowUrl: '/leaflet/marker-shadow.png',
 });
 
-// Define custom icons for waypoint types
+// Define custom icons for waypoint types and user location
 interface IconMap {
     [key: string]: Icon;
 }
@@ -31,50 +32,56 @@ const iconMap: IconMap = {
         popupAnchor: [0, -24],
     }),
     'Trail Junction': L.icon({
-        iconUrl:'/icons/direction.svg',
+        iconUrl: '/icons/direction.svg',
         className: 'icon-with-circle',
         iconSize: [24, 24],
         popupAnchor: [0, -24],
     }),
     'Paved Road': L.icon({
-        iconUrl:'/icons/road.svg',
+        iconUrl: '/icons/road.svg',
         className: 'icon-with-circle',
         iconSize: [24, 24],
         popupAnchor: [0, -24],
     }),
     'Unpaved Road': L.icon({
-        iconUrl:'/icons/road.svg',
+        iconUrl: '/icons/road.svg',
         className: 'icon-with-circle',
         iconSize: [24, 24],
         popupAnchor: [0, -24],
     }),
     'Established Campsite': L.icon({
-        iconUrl:'/icons/tent.svg',
+        iconUrl: '/icons/tent.svg',
         className: 'icon-with-circle',
         iconSize: [24, 24],
         popupAnchor: [0, -24],
     }),
     'Undeveloped Campsite': L.icon({
-        iconUrl:'/icons/fire.svg',
+        iconUrl: '/icons/fire.svg',
         className: 'icon-with-circle',
         iconSize: [24, 24],
         popupAnchor: [0, -24],
     }),
     'Resupply': L.icon({
-        iconUrl:'/icons/city.svg',
+        iconUrl: '/icons/city.svg',
         className: 'icon-with-circle',
         iconSize: [24, 24],
         popupAnchor: [0, -24],
     }),
     'Landmark': L.icon({
-        iconUrl:'/icons/flag.svg',
+        iconUrl: '/icons/flag.svg',
         className: 'icon-with-circle',
         iconSize: [24, 24],
         popupAnchor: [0, -24],
     }),
     'default': L.icon({
-        iconUrl:'/icons/point.svg',
+        iconUrl: '/icons/point.svg',
         className: 'icon-with-circle',
+        iconSize: [24, 24],
+        popupAnchor: [0, -24],
+    }),
+    'user': L.icon({
+        iconUrl: '/icons/user-location.svg',
+        className: 'user-location-icon icon-with-circle',
         iconSize: [24, 24],
         popupAnchor: [0, -24],
     }),
@@ -151,11 +158,18 @@ const getNormalizedType = (type: string | undefined): string => {
     return 'default';
 };
 
-// Extend Marker to include note property
+// Extend Marker to include note property and rotation
 interface CustomMarker extends Marker {
     note?: string;
+    setRotationAngle?: (angle: number) => void;
 }
 
+// User location state
+interface UserLocation {
+    latlng: LatLng;
+    heading: number;
+    timestamp: number;
+}
 
 // LayersControl
 interface LayersControlOptions extends ControlOptions {
@@ -175,7 +189,6 @@ const LayersControl = Control.extend({
         button.style.height = '30px';
         button.style.backgroundImage = "url('/icons/layers.svg')";
         button.style.cursor = 'pointer';
-        // button.style.border = '1px solid #8AADB9';
         button.style.borderRadius = '2px';
 
         const dropdown = L.DomUtil.create('div', 'leaflet-control-layers-expanded', container);
@@ -253,23 +266,31 @@ const LayersControl = Control.extend({
     },
 });
 
+interface LocationControlOptions extends ControlOptions {
+    onToggleTracking: () => void;
+}
+
 // LocationControl
 const LocationControl = Control.extend({
-    options: { position: 'topright' } as ControlOptions,
+    options: { position: 'topright' } as LocationControlOptions,
+    initialize: function (options: LocationControlOptions) {
+        L.setOptions(this, options);
+        this.onToggleTracking = options.onToggleTracking;
+    },
     onAdd: function (map: LeafletMap) {
+        console.log("map: ", map);
+        console.log('LocationControl: Initializing');
         const container = L.DomUtil.create('div', 'leaflet-control leaflet-control-location');
         container.style.width = '32px';
         container.style.height = '30px';
         container.style.marginBottom = '2px';
         container.style.backgroundColor = '#fff';
-        // container.style.border = '2px solid rgba(60, 60, 60, 0.5)';
-        // container.style.borderRadius = '4px';
         container.style.cursor = 'pointer';
 
         const button = L.DomUtil.create('div', '', container);
         button.style.width = '32px';
         button.style.height = '30px';
-        button.style.backgroundImage ="url('/icons/location.svg')";
+        button.style.backgroundImage = "url('/icons/location.svg')";
         button.style.border = '2px solid rgba(60, 60, 60, 0.5)';
         button.style.borderRadius = '2px';
         button.style.backgroundSize = '24px 24px';
@@ -277,50 +298,10 @@ const LocationControl = Control.extend({
         button.style.backgroundRepeat = 'no-repeat';
 
         L.DomEvent.on(button, 'click', async (e: Event) => {
+            console.log('LocationControl: Button clicked');
             L.DomEvent.stopPropagation(e);
-            if (!window.isSecureContext) {
-                alert('Geolocation requires a secure context (HTTPS or localhost).');
-                return;
-            }
-            if ('permissions' in navigator) {
-                try {
-                    const permissionStatus = await navigator.permissions.query({ name: 'geolocation' });
-                    if (permissionStatus.state === 'denied') {
-                        alert('Location access is denied. Please enable location services in your browser or system settings.');
-                        return;
-                    }
-                } catch (error: unknown) {
-                    console.warn('Permission query failed:', error);
-                }
-            }
-            if (!navigator.geolocation) {
-                alert('Geolocation is not supported by this browser.');
-                return;
-            }
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    const { latitude, longitude } = position.coords;
-                    map.setView([latitude, longitude], 15);
-                    const marker = L.marker([latitude, longitude]).addTo(map);
-                    setTimeout(() => map.removeLayer(marker), 5000);
-                },
-                (error: GeolocationPositionError) => {
-                    switch (error.code) {
-                        case error.PERMISSION_DENIED:
-                            alert('Location access denied. Please enable location services in your browser or system settings.');
-                            break;
-                        case error.POSITION_UNAVAILABLE:
-                            alert('Location information is unavailable.');
-                            break;
-                        case error.TIMEOUT:
-                            alert('The request to get location timed out.');
-                            break;
-                        default:
-                            alert('An error occurred while retrieving location: ' + error.message);
-                    }
-                },
-                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-            );
+            this.onToggleTracking();
+            button.style.backgroundColor = button.style.backgroundColor === 'rgb(224, 224, 224)' ? '#fff' : '#e0e0e0';
         });
 
         L.DomEvent.on(container, 'click', L.DomEvent.stopPropagation);
@@ -344,14 +325,12 @@ const NoteControl = Control.extend({
         container.style.height = '30px';
         container.style.marginBottom = '2px';
         container.style.backgroundColor = '#fff';
-        // container.style.border = '2px solid rgba(60, 60, 60, 0.5)';
-        // container.style.borderRadius = '4px';
         container.style.cursor = 'pointer';
 
         const button = L.DomUtil.create('div', '', container);
         button.style.width = '32px';
         button.style.height = '30px';
-        button.style.backgroundImage ="url('/icons/comment.svg')";
+        button.style.backgroundImage = "url('/icons/comment.svg')";
         button.style.border = '2px solid rgba(60, 60, 60, 0.5)';
         button.style.borderRadius = '2px';
         button.style.backgroundSize = '20px 20px';
@@ -414,14 +393,12 @@ const QueryFeaturesControl = Control.extend({
         container.style.height = '30px';
         container.style.marginBottom = '2px';
         container.style.backgroundColor = '#fff';
-        // container.style.border = '2px solid rgba(60, 60, 60, 0.5)';
-        // container.style.borderRadius = '4px';
         container.style.cursor = 'pointer';
 
         const button = L.DomUtil.create('div', '', container);
         button.style.width = '32px';
         button.style.height = '30px';
-        button.style.backgroundImage ="url('/icons/search.svg')";
+        button.style.backgroundImage = "url('/icons/search.svg')";
         button.style.borderRadius = '2px';
         button.style.border = '2px solid rgba(60, 60, 60, 0.5)';
         button.style.backgroundSize = '20px 20px';
@@ -509,11 +486,8 @@ const LoadMapControl = Control.extend({
         container.style.height = '30px';
         container.style.marginBottom = '2px';
         container.style.backgroundColor = '#fff';
-        // container.style.border = '2px solid rgba(60, 60, 60, 0.5)';
-        // container.style.borderRadius = '4px';
         container.style.cursor = 'pointer';
         container.style.top = '50px';
-
 
         const button = L.DomUtil.create('div', '', container);
         button.style.width = '72px';
@@ -613,7 +587,7 @@ const LoadMapControl = Control.extend({
                                             const icon = iconMap[type] || iconMap.default;
                                             return L.marker(latlng, { icon });
                                         },
-                                        style: { color: '#ff0000', weight: 4, opacity: 0.7 },
+                                        style: { color: '#630000', weight: 4, opacity: 0.7 },
                                         onEachFeature: (feature, layer) => {
                                             if (feature.geometry.type !== 'Point' || !feature.properties) {
                                                 console.warn('Skipping popup for invalid feature:', feature);
@@ -678,9 +652,8 @@ const LoadMapControl = Control.extend({
                                     input.checked = false;
                                 });
                         } else {
-                            new L.GPX(path, {
+                            new GPX(path, {
                                 async: true,
-                                // marker_options: { startIcon: undefined, endIcon: undefined, shadow: undefined },
                                 polyline_options: { color: '#ff0000', weight: 4, opacity: 0.7 },
                             })
                                 .on('loaded', (e: L.LeafletEvent) => {
@@ -739,7 +712,14 @@ const Map = () => {
     const map = useRef<L.Map | null>(null);
     const drawControl = useRef<L.Control.Draw | null>(null);
     const drawnItems = useRef(new L.FeatureGroup());
+    const userMarker = useRef<CustomMarker | null>(null);
     const [drawnFeatures, setDrawnFeatures] = useState<number[]>([]);
+    const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
+    const [isTracking, setIsTracking] = useState(false);
+    const watchId = useRef<number | null>(null);
+    const hasIMU = useRef<boolean>('DeviceOrientationEvent' in window);
+
+    console.log('Map: Component initialized, hasIMU:', hasIMU.current);
 
     const baseLayers = {
         OpenStreetMap: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -764,9 +744,192 @@ const Map = () => {
         }),
     };
 
+    // Handle geolocation updates
+    const handleGeolocation = (position: GeolocationPosition) => {
+        console.log('Geolocation: Received position', {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            heading: position.coords.heading,
+            timestamp: position.timestamp,
+        });
+        const { latitude, longitude, heading } = position.coords;
+        const timestamp = position.timestamp;
+        setUserLocation((prev) => {
+            const newHeading = heading !== null ? heading : prev?.heading || 0;
+            return {
+                latlng: new LatLng(latitude, longitude),
+                heading: newHeading,
+                timestamp,
+            };
+        });
+    };
+
+    // Handle geolocation errors
+    const handleGeolocationError = (error: GeolocationPositionError) => {
+        console.error('Geolocation: Error', { code: error.code, message: error.message });
+        setIsTracking(false);
+        setUserLocation(null);
+        if (userMarker.current && map.current) {
+            map.current.removeLayer(userMarker.current);
+            userMarker.current = null;
+        }
+        switch (error.code) {
+            case error.PERMISSION_DENIED:
+                alert('Location access denied. Please enable location services.');
+                break;
+            case error.POSITION_UNAVAILABLE:
+                alert('Location information is unavailable.');
+                break;
+            case error.TIMEOUT:
+                alert('The request to get location timed out.');
+                break;
+            default:
+                alert(`Geolocation error: ${error.message}`);
+        }
+    };
+
+    // Handle device orientation for IMU data
+    const handleDeviceOrientation = (event: DeviceOrientationEvent) => {
+        console.log('DeviceOrientation: Received event', {
+            alpha: event.alpha,
+            beta: event.beta,
+            gamma: event.gamma,
+        });
+        let heading = event.alpha;
+        if (heading !== null) {
+            heading = (360 - heading) % 360; // Normalize to 0-360
+            setUserLocation((prev) => {
+                if (!prev) return prev;
+                if (Math.abs(prev.heading - heading) < HEADING_THRESHOLD) return prev;
+                console.log('DeviceOrientation: Updating heading', heading);
+                return { ...prev, heading };
+            });
+        } else {
+            console.warn('DeviceOrientation: No alpha value available');
+        }
+    };
+
+    // Start tracking location and orientation
+    const startTracking = async () => {
+        console.log('startTracking: Initiating');
+        if (!window.isSecureContext) {
+            console.error('startTracking: Secure context required');
+            alert('Geolocation requires a secure context (HTTPS or localhost).');
+            setIsTracking(false);
+            return;
+        }
+        if (!navigator.geolocation) {
+            console.error('startTracking: Geolocation not supported');
+            alert('Geolocation is not supported by this browser.');
+            setIsTracking(false);
+            return;
+        }
+        if ('permissions' in navigator) {
+            try {
+                const geoPermission = await navigator.permissions.query({ name: 'geolocation' });
+                console.log('startTracking: Geolocation permission state', geoPermission.state);
+                if (geoPermission.state === 'denied') {
+                    console.error('startTracking: Geolocation permission denied');
+                    alert('Location access is denied. Please enable location services.');
+                    setIsTracking(false);
+                    return;
+                }
+                if (hasIMU.current && 'DeviceOrientationEvent' in window && typeof (DeviceOrientationEvent as any).requestPermission === 'function') {
+                    try {
+                        const orientationPermission = await (DeviceOrientationEvent as any).requestPermission();
+                        console.log('startTracking: Orientation permission', orientationPermission);
+                        if (orientationPermission !== 'granted') {
+                            console.warn('startTracking: Device orientation permission denied');
+                            hasIMU.current = false;
+                        }
+                    } catch (error) {
+                        console.warn('startTracking: Error requesting orientation permission', error);
+                        hasIMU.current = false;
+                    }
+                }
+            } catch (error) {
+                console.warn('startTracking: Permission query failed', error);
+            }
+        }
+
+        console.log('startTracking: Starting watchPosition');
+        watchId.current = navigator.geolocation.watchPosition(
+            handleGeolocation,
+            handleGeolocationError,
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: POLL_INTERVAL }
+        );
+
+        if (hasIMU.current) {
+            console.log('startTracking: Adding deviceorientation listener');
+            window.addEventListener('deviceorientation', handleDeviceOrientation);
+        } else {
+            console.log('startTracking: No IMU support, relying on GPS heading');
+        }
+
+        setIsTracking(true);
+        console.log('startTracking: Tracking started, watchId:', watchId.current);
+    };
+
+    // Stop tracking location and orientation
+    const stopTracking = () => {
+        console.log('stopTracking: Initiating, watchId:', watchId.current);
+        if (watchId.current !== null) {
+            navigator.geolocation.clearWatch(watchId.current);
+            watchId.current = null;
+        }
+        if (hasIMU.current) {
+            window.removeEventListener('deviceorientation', handleDeviceOrientation);
+        }
+        setIsTracking(false);
+        setUserLocation(null);
+        if (userMarker.current && map.current) {
+            map.current.removeLayer(userMarker.current);
+            userMarker.current = null;
+        }
+        console.log('stopTracking: Tracking stopped');
+    };
+
+    // Update user marker on map
+    useEffect(() => {
+        if (!map.current || !userLocation) {
+            console.log('UserLocation useEffect: No map or userLocation');
+            return;
+        }
+
+        console.log('UserLocation useEffect: Updating marker', {
+            lat: userLocation.latlng.lat,
+            lng: userLocation.latlng.lng,
+            heading: userLocation.heading,
+        });
+
+        if (!userMarker.current) {
+            userMarker.current = L.marker(userLocation.latlng, {
+                icon: iconMap.user,
+            }).addTo(map.current);
+            userMarker.current.bindPopup(`
+                <b>Your Location</b><br>
+                <b>Coordinates:</b> [${userLocation.latlng.lat.toFixed(6)}, ${userLocation.latlng.lng.toFixed(6)}]<br>
+                <b>Heading:</b> ${userLocation.heading.toFixed(0)}°
+            `);
+            console.log('UserLocation useEffect: Created new marker');
+        } else {
+            userMarker.current.setLatLng(userLocation.latlng);
+            userMarker.current.setRotationAngle?.(userLocation.heading);
+            userMarker.current.setPopupContent(`
+                <b>Your Location</b><br>
+                <b>Coordinates:</b> [${userLocation.latlng.lat.toFixed(6)}, ${userLocation.latlng.lng.toFixed(6)}]<br>
+                <b>Heading:</b> ${userLocation.heading.toFixed(0)}°
+            `);
+            console.log('UserLocation useEffect: Updated existing marker');
+        }
+
+        map.current.setView(userLocation.latlng, 15);
+    }, [userLocation]);
+
     useEffect(() => {
         if (!mapContainer.current) return;
 
+        console.log('Map useEffect: Initializing map');
         try {
             map.current = L.map(mapContainer.current, {
                 center: [39, -98],
@@ -778,7 +941,14 @@ const Map = () => {
             if (map.current) {
                 map.current.addControl(new L.Control.Zoom({ position: 'topright' }));
                 map.current.addControl(new LayersControl({ position: 'topright', baseLayers } as LayersControlOptions));
-                map.current.addControl(new LocationControl());
+                map.current.addControl(new LocationControl({ position: 'topright', onToggleTracking: () => {
+                    console.log('LocationControl: Toggle tracking, current isTracking:', isTracking);
+                    if (isTracking) {
+                        stopTracking();
+                    } else {
+                        startTracking();
+                    }
+                }} as any));
                 map.current.addControl(new NoteControl({ drawnItems: drawnItems.current } as NoteControlOptions));
                 map.current.addControl(new QueryFeaturesControl());
                 map.current.addControl(new LoadMapControl());
@@ -798,7 +968,7 @@ const Map = () => {
                 map.current.addControl(drawControl.current);
 
                 map.current.on('draw:created', (e: L.LeafletEvent) => {
-                    const event = e as any; // Workaround for Leaflet-Draw type mismatch
+                    const event = e as any;
                     const layer = event.layer as L.Layer;
                     const featureId = L.stamp(layer);
                     drawnItems.current.addLayer(layer);
@@ -806,7 +976,7 @@ const Map = () => {
                 });
 
                 map.current.on('draw:deleted', (e: L.LeafletEvent) => {
-                    const event = e as any; // Workaround for Leaflet-Draw type mismatch
+                    const event = e as any;
                     const deletedFeatureIds: number[] = [];
                     (event.layers as L.LayerGroup).eachLayer((layer: L.Layer) => {
                         deletedFeatureIds.push(L.stamp(layer));
@@ -814,10 +984,8 @@ const Map = () => {
                     setDrawnFeatures((prev) => prev.filter((id) => !deletedFeatureIds.includes(id)));
                 });
 
-                // Ensure the map resizes correctly
                 map.current.invalidateSize();
 
-                // Handle window resize to update map size
                 const handleResize = () => {
                     if (map.current) {
                         map.current.invalidateSize();
@@ -829,13 +997,16 @@ const Map = () => {
                     alert('Offline mode: Only cached GeoJSON data is available. Select "Offline" layer for best experience.');
                 }
 
+                console.log('Map useEffect: Map initialized');
                 return () => {
+                    console.log('Map useEffect: Cleaning up');
                     window.removeEventListener('resize', handleResize);
                     if (map.current) map.current.remove();
+                    stopTracking();
                 };
             }
         } catch (error) {
-            console.error('Failed to initialize map:', error);
+            console.error('Map useEffect: Failed to initialize map', error);
         }
     }, []);
 

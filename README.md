@@ -51,7 +51,7 @@ python -m venv .venv
 .venv/bin/python app/scripts/prepare_pwa_data.py
 ```
 
-Without trail data, the app still starts and shows the base map. The "Load Data" menu will fail for missing files until the expected GeoJSON files exist at these default paths:
+Without trail data, the app still starts and shows the base map. The "Layers" menu will fail for missing files until the expected GeoJSON files exist at these default paths:
 
 ```text
 public/geojson/halfmile/socal.geojson
@@ -182,7 +182,11 @@ Verified locally on June 25, 2026:
 ## Notes
 
 - No `.env` file is required for the current local startup path.
-- The committed `public/geojson/**/*.geojson` files are precached by the service worker during PWA install, so installed users can reload and load those map layers offline after the service worker has finished installing.
+- The PWA precaches the app shell, icons, manifest, Leaflet marker images, JS, CSS, and HTML so the installed app can reopen offline.
+- GeoJSON map data is not automatically precached. Use **Downloads > Trail data** to download a region bundle for offline map use. Each region bundle stores both the PCTA trail GeoJSON and Halfmile notes GeoJSON in the browser Cache API.
+- Use **Layers** for visible map choices: basemap, PCTA trail overlays, and Halfmile note overlays. Use **Downloads** for saved-for-offline data. Download actions show a download icon when data is missing and a trash icon when it is saved.
+- Use the square map UI toggle or press `H` to hide the header and map controls. Press `H` or `Esc` to show them again.
+- Double-click the map to query nearby features. This requires network access.
 - PWA install prompts are browser-controlled. The app always shows an Install button, but Chrome/Edge only show the native prompt when the site is HTTPS, has a valid manifest, has an active service worker, and is not already installed or temporarily dismissed.
 - Browser geolocation requires a secure context. `localhost` and `127.0.0.1` satisfy that requirement during local development.
 - Weather popups call `api.weather.gov`, and feature queries call OpenStreetMap Nominatim, so those features need network access.

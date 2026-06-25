@@ -47,8 +47,26 @@ export default defineConfig({
         },
 
         workbox: {
-            globPatterns: ['**/*.{js,css,html,svg,png,ico,json,webmanifest,geojson}'],
-            maximumFileSizeToCacheInBytes: 15 * 1024 * 1024,
+            globPatterns: ['**/*.{js,css,html,svg,png,ico,json,webmanifest}'],
+            runtimeCaching: [
+                {
+                    urlPattern: ({ request }) => {
+                        const url = request.url.split('?')[0];
+                        return url.includes('/geojson/') && url.endsWith('.geojson');
+                    },
+                    handler: 'CacheFirst',
+                    options: {
+                        cacheName: 'openpct-map-data-v1',
+                        cacheableResponse: {
+                            statuses: [0, 200],
+                        },
+                        expiration: {
+                            maxEntries: 60,
+                            purgeOnQuotaError: true,
+                        },
+                    },
+                },
+            ],
             cleanupOutdatedCaches: true,
             clientsClaim: true,
             skipWaiting: true,

@@ -1,5 +1,67 @@
-.leaflet-control-zoom {
-    margin-top: 50px !important; /* Shift zoom buttons 50px down from topright */
+.leaflet-top.leaflet-left,
+.leaflet-top.leaflet-right {
+    top: 48px;
+}
+
+body.openpct-ui-hidden .navbar,
+body.openpct-ui-hidden .PWABadge,
+body.openpct-ui-hidden .leaflet-control {
+    display: none !important;
+}
+
+body.openpct-ui-hidden .leaflet-top.leaflet-left,
+body.openpct-ui-hidden .leaflet-top.leaflet-right {
+    top: 8px;
+}
+
+.map-container:not(.openpct-show-draw-tools) .leaflet-draw {
+    display: none;
+}
+
+.openpct-hide-hint,
+.openpct-hidden-logo {
+    display: none;
+    position: absolute;
+    z-index: 1001;
+    pointer-events: none;
+    font-family: Arial, sans-serif;
+}
+
+body.openpct-ui-hidden .openpct-hide-hint {
+    display: block;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 8px 12px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.72);
+    color: #fff;
+    font-size: 13px;
+    animation: openpct-hide-hint-fade 3s ease forwards;
+}
+
+body.openpct-ui-hidden .openpct-hidden-logo {
+    display: block;
+    right: 16px;
+    bottom: 0px;
+    width: 92px;
+    height: auto;
+    filter: drop-shadow(0 1px 2px rgba(255, 255, 255, 0.85));
+}
+
+@keyframes openpct-hide-hint-fade {
+    0% {
+        opacity: 0;
+    }
+    12% {
+        opacity: 1;
+    }
+    78% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+    }
 }
 
 .user-location-icon {

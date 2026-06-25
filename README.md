@@ -128,6 +128,28 @@ CNAME www  <your-github-username>.github.io
 
 After DNS resolves, return to GitHub Pages settings and enable **Enforce HTTPS**.
 
+## Google Analytics
+
+Google Analytics 4 is optional. If no measurement ID is configured, the app builds and runs without loading Google Analytics.
+
+1. In Google Analytics, create a GA4 property and add a web data stream for `https://openpct.com`.
+2. Copy the measurement ID, which looks like `G-XXXXXXXXXX`.
+3. For local testing, copy `.env.example` to `.env` and set:
+
+```text
+VITE_OPENPCT_GA_MEASUREMENT_ID=G-XXXXXXXXXX
+VITE_OPENPCT_GA_DEBUG=true
+```
+
+4. For GitHub Pages, add these repository variables under **Settings > Secrets and variables > Actions > Variables**:
+
+```text
+VITE_OPENPCT_GA_MEASUREMENT_ID=G-XXXXXXXXXX
+VITE_OPENPCT_GA_DEBUG=false
+```
+
+The implementation tracks only non-sensitive app events: PWA install prompt outcomes, map layer loads by group/region, offline region downloads/clears, and UI hide/show. It does not send GPS coordinates, note text, user-entered data, or custom user identifiers.
+
 ## Host Map Data On S3
 
 The generated map data is intentionally ignored by git. Host it in S3 or CloudFront, then point the PWA build at that public URL.
@@ -176,6 +198,7 @@ Verified locally on June 25, 2026:
 - `yarn build` completes and generates `dist/`, `dist/sw.js`, and PWA assets.
 - `yarn dev --host 127.0.0.1` starts Vite at `http://127.0.0.1:5173/`.
 - `curl -I http://127.0.0.1:5173/` returns `HTTP/1.1 200 OK`.
+- With `VITE_OPENPCT_GA_MEASUREMENT_ID` set, Google Tag Assistant or Chrome DevTools should show requests to `googletagmanager.com` and `google-analytics.com`. With it unset, those requests should not appear.
 
 `yarn lint` currently fails on pre-existing TypeScript lint issues, mostly `@typescript-eslint/no-explicit-any` in `src/App.tsx` and `src/components/Map.tsx`, plus one React hook dependency warning in `Map.tsx`.
 
@@ -187,6 +210,7 @@ Verified locally on June 25, 2026:
 - Use **Layers** for visible map choices: basemap, PCTA trail overlays, and Halfmile note overlays. Use **Downloads** for saved-for-offline data. Download actions show a download icon when data is missing and a trash icon when it is saved.
 - Use the square map UI toggle or press `H` to hide the header and map controls. Press `H` or `Esc` to show them again.
 - Double-click the map to query nearby features. This requires network access.
+- Google Analytics is disabled unless `VITE_OPENPCT_GA_MEASUREMENT_ID` is set. Analytics events are best-effort and are dropped if the browser is offline or blocks Google scripts.
 - PWA install prompts are browser-controlled. The app always shows an Install button, but Chrome/Edge only show the native prompt when the site is HTTPS, has a valid manifest, has an active service worker, and is not already installed or temporarily dismissed.
 - Browser geolocation requires a secure context. `localhost` and `127.0.0.1` satisfy that requirement during local development.
 - Weather popups call `api.weather.gov`, and feature queries call OpenStreetMap Nominatim, so those features need network access.

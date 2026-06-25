@@ -3,6 +3,7 @@ import Navbar from './components/Navbar.tsx';
 import PWABadge from './PWABadge.tsx';
 import Map from './components/Map.tsx';
 import './App.css';
+import { trackEvent } from './analytics.ts';
 
 function App() {
   const [deferredPrompt, setDeferredPrompt] = useState<Event | null>(null);
@@ -31,6 +32,7 @@ function App() {
     (deferredPrompt as any).prompt();
     const { outcome } = await (deferredPrompt as any).userChoice;
     console.log(`User response to the install prompt: ${outcome}`);
+    trackEvent(outcome === 'accepted' ? 'pwa_install_prompt_accepted' : 'pwa_install_prompt_dismissed');
     setDeferredPrompt(null);
   };
 

@@ -4,6 +4,8 @@
 interface ImportMetaEnv {
   readonly VITE_OPENPCT_GEOJSON_BASE_URL?: string;
   readonly VITE_OPENPCT_LEAFLET_ICON_BASE_URL?: string;
+  readonly VITE_OPENPCT_GA_MEASUREMENT_ID?: string;
+  readonly VITE_OPENPCT_GA_DEBUG?: string;
   readonly VITE_OPENPCT_HALFMILE_SOCAL_LABEL?: string;
   readonly VITE_OPENPCT_HALFMILE_SOCAL_GEOJSON_URL?: string;
   readonly VITE_OPENPCT_HALFMILE_CENTRAL_LABEL?: string;
@@ -28,4 +30,9 @@ interface ImportMetaEnv {
 
 interface ImportMeta {
   readonly env: ImportMetaEnv;
+}
+
+interface Window {
+  dataLayer?: IArguments[];
+  gtag?: (...args: unknown[]) => void;
 }

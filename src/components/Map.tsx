@@ -10,6 +10,7 @@ import {
     downloadMapDataFiles,
     getMapDataCacheStatus,
 } from '../mapDataCache';
+import { trackEvent } from '../analytics';
 
 // Configuration
 const env = import.meta.env;
@@ -650,18 +651,21 @@ const UiToggleControl = Control.extend({
         button.style.color = '#333';
         button.style.cursor = 'pointer';
 
-        const setHidden = (hidden: boolean) => {
+        const setHidden = (hidden: boolean, shouldTrack = true) => {
             document.body.classList.toggle('openpct-ui-hidden', hidden);
             button.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6M9 9h6v6H9z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
             button.title = 'Hide controls (H)';
             button.setAttribute('aria-label', 'Hide controls');
+            if (shouldTrack) {
+                trackEvent(hidden ? 'ui_hidden' : 'ui_shown');
+            }
         };
 
         const toggleHidden = () => {
             setHidden(!document.body.classList.contains('openpct-ui-hidden'));
         };
 
-        setHidden(document.body.classList.contains('openpct-ui-hidden'));
+        setHidden(document.body.classList.contains('openpct-ui-hidden'), false);
 
         L.DomEvent.on(button, 'click', (e: Event) => {
             L.DomEvent.stopPropagation(e);
@@ -777,7 +781,7 @@ const LayersControl = Control.extend({
             groupContainers[group] = section.content;
         });
 
-        files.forEach(({ name, path, group }) => {
+        files.forEach(({ name, path, group, region }) => {
             const groupContent = groupContainers[group] || dropdown;
             const label = L.DomUtil.create('label', '', groupContent);
             label.style.display = 'grid';
@@ -875,6 +879,10 @@ const LayersControl = Control.extend({
                                 loadedLayers[path] = layer;
                                 map.addLayer(layer);
                                 updateMapBounds();
+                                trackEvent('map_layer_loaded', {
+                                    layer_group: group,
+                                    region,
+                                });
                             })
                             .catch((error: unknown) => {
                                 const message = error instanceof Error ? error.message : 'Unknown error';
@@ -1020,8 +1028,8 @@ const DownloadsControl = Control.extend({
             });
         };
 
-        const downloadPaths = async (paths: string[], statusElement?: HTMLSpanElement) => {
-            if (paths.length === 0) return;
+        const downloadPaths = async (paths: string[], statusElement?: HTMLSpanElement): Promise<boolean> => {
+            if (paths.length === 0) return false;
 
             setPathsStatus(paths, 'downloading');
             if (statusElement) {
@@ -1035,6 +1043,7 @@ const DownloadsControl = Control.extend({
                     }
                 });
                 await refreshCacheStatuses();
+                return true;
             } catch (error: unknown) {
                 setPathsStatus(paths, 'failed');
                 if (statusElement) {
@@ -1043,11 +1052,12 @@ const DownloadsControl = Control.extend({
                 const message = error instanceof Error ? error.message : 'Unknown error';
                 console.error('Error downloading offline map data:', error);
                 alert(`Error downloading offline map data: ${message}`);
+                return false;
             }
         };
 
-        const clearPaths = async (paths: string[], statusElement?: HTMLSpanElement) => {
-            if (paths.length === 0) return;
+        const clearPaths = async (paths: string[], statusElement?: HTMLSpanElement): Promise<boolean> => {
+            if (paths.length === 0) return false;
 
             try {
                 await clearMapDataFiles(paths);
@@ -1055,6 +1065,7 @@ const DownloadsControl = Control.extend({
                     statusElement.textContent = 'Not downloaded';
                 }
                 await refreshCacheStatuses();
+                return true;
             } catch (error: unknown) {
                 if (statusElement) {
                     statusElement.textContent = 'Failed';
@@ -1062,6 +1073,7 @@ const DownloadsControl = Control.extend({
                 const message = error instanceof Error ? error.message : 'Unknown error';
                 console.error('Error clearing offline map data:', error);
                 alert(`Error clearing offline map data: ${message}`);
+                return false;
             }
         };
 
@@ -1100,10 +1112,14 @@ const DownloadsControl = Control.extend({
                 L.DomEvent.stopPropagation(e);
                 const statuses = await getMapDataCacheStatus(regionPaths);
                 if (arePathsDownloaded(regionPaths, statuses)) {
-                    await clearPaths(regionPaths, status);
+                    if (await clearPaths(regionPaths, status)) {
+                        trackEvent('offline_region_cleared', { region: region.key });
+                    }
                     return;
                 }
-                await downloadPaths(regionPaths, status);
+                if (await downloadPaths(regionPaths, status)) {
+                    trackEvent('offline_region_downloaded', { region: region.key });
+                }
             });
         });
 

@@ -19,12 +19,17 @@ body.openpct-ui-hidden .leaflet-top.leaflet-right {
 }
 
 .openpct-hide-hint,
-.openpct-hidden-logo {
+.openpct-hidden-logo,
+.openpct-exit-hidden-button {
     display: none;
     position: absolute;
     z-index: 1001;
-    pointer-events: none;
     font-family: Arial, sans-serif;
+}
+
+.openpct-hide-hint,
+.openpct-hidden-logo {
+    pointer-events: none;
 }
 
 body.openpct-ui-hidden .openpct-hide-hint {
@@ -47,6 +52,20 @@ body.openpct-ui-hidden .openpct-hidden-logo {
     width: 92px;
     height: auto;
     filter: drop-shadow(0 1px 2px rgba(255, 255, 255, 0.85));
+}
+
+body.openpct-ui-hidden .openpct-exit-hidden-button {
+    top: 16px;
+    right: 16px;
+    padding: 8px 10px;
+    border: 2px solid rgba(60, 60, 60, 0.5);
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.94);
+    color: #222;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
+    pointer-events: auto;
 }
 
 @keyframes openpct-hide-hint-fade {
@@ -81,4 +100,48 @@ body.openpct-ui-hidden .openpct-hidden-logo {
 .icon-with-circle:hover {
     background-color: rgba(255, 255, 255, 1);
     box-shadow: 0 0 4px rgba(0, 0, 0, 1);
+}
+
+@media (max-width: 640px) {
+    .leaflet-top.leaflet-left {
+        z-index: 1500;
+    }
+
+    .leaflet-control-layers-openpct-expanded,
+    .leaflet-control-downloads-openpct-expanded {
+        left: 88px !important;
+        max-height: calc(100vh - 96px);
+        max-width: calc(100vw - 96px) !important;
+        min-width: 0 !important;
+        overflow-y: auto;
+        top: 0 !important;
+        width: calc(100vw - 104px);
+        z-index: 1501;
+    }
+
+    .leaflet-control-downloads-openpct-expanded {
+        left: 96px !important;
+    }
+
+    .leaflet-control-annotate-openpct-expanded {
+        max-width: calc(100vw - 108px) !important;
+        z-index: 1501;
+    }
+
+    .leaflet-popup,
+    .leaflet-popup-pane {
+        z-index: 1400;
+    }
+
+    body.openpct-ui-hidden .openpct-hide-hint {
+        left: 16px;
+        right: 16px;
+        transform: none;
+        top: 56px;
+        text-align: center;
+    }
+
+    body.openpct-ui-hidden .openpct-exit-hidden-button {
+        display: block;
+    }
 }

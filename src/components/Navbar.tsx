@@ -29,6 +29,7 @@ function Navbar({ isInstallable, isIOS, isOffline, handleInstallClick }: NavbarP
         <img src={appLogo} className="logo" alt="OpenPCT PWA logo" />
       </div>
       <div className="navbar-actions">
+        <div id="openpct-navbar-search" className="navbar-search-slot" />
         {isOffline && <span className="offline-status">Offline mode</span>}
         <button onClick={handleInstall} className="install-link" title="Install OpenPCT">
           Install

@@ -32,6 +32,35 @@ type Region = {
     name: string;
 };
 
+type IndexedFeature = {
+    id: string;
+    path: string;
+    group: DataGroup;
+    region: RegionKey;
+    title: string;
+    subtitle: string;
+    searchableText: string;
+    feature: GeoJSON.Feature;
+    properties: Record<string, any>;
+    latlng?: L.LatLng;
+    lineLatLngs?: L.LatLng[][];
+    bounds?: L.LatLngBounds;
+    layer?: L.Layer;
+    pctMileNb?: number;
+};
+
+type SearchResult = {
+    feature: IndexedFeature;
+    score: number;
+};
+
+type BaseLayerName = 'OpenStreetMap' | 'OpenTopoMap' | 'Satellite' | 'Dark' | 'Offline';
+
+type LayerPreferences = {
+    baseLayer?: BaseLayerName;
+    visibleLayerPaths?: string[];
+};
+
 const envValue = (key: keyof ImportMetaEnv, fallback: string): string => {
     const value = env[key];
     if (value === undefined) return fallback;
@@ -67,6 +96,16 @@ const DEFAULT_PCT_BOUNDS: L.LatLngBoundsExpression = [
     [49.15, -116.2],
 ];
 const DEFAULT_VISIBLE_DATA_GROUP: DataGroup = 'PCTA Trail Data';
+const enabledFeatureIndex = new globalThis.Map<string, IndexedFeature[]>();
+const LAYER_PREFERENCES_STORAGE_KEY = 'openpct-layer-preferences-v1';
+const PCTA_REGION_START_MILES: Record<RegionKey, number> = {
+    socal: 0,
+    central: 645.2,
+    nocal: 1156.1,
+    or: 1717.7,
+    wa: 2147.6,
+};
+const PCT_TOTAL_MILES = 2655.221;
 
 const regions: Region[] = [
     { key: 'socal', name: 'Southern California' },
@@ -158,6 +197,41 @@ const dataFiles: DataFile[] = [
         'wa'
     ),
 ].filter((file): file is DataFile => file !== null);
+
+const readLayerPreferences = (): LayerPreferences | null => {
+    try {
+        const rawPreferences = window.localStorage.getItem(LAYER_PREFERENCES_STORAGE_KEY);
+        if (!rawPreferences) return null;
+        const preferences = JSON.parse(rawPreferences) as LayerPreferences;
+        return preferences && typeof preferences === 'object' ? preferences : null;
+    } catch (error) {
+        console.warn('Error reading saved layer preferences:', error);
+        return null;
+    }
+};
+
+const writeLayerPreferences = (preferences: LayerPreferences) => {
+    try {
+        window.localStorage.setItem(LAYER_PREFERENCES_STORAGE_KEY, JSON.stringify(preferences));
+    } catch (error) {
+        console.warn('Error saving layer preferences:', error);
+    }
+};
+
+const isBaseLayerName = (value: unknown): value is BaseLayerName => {
+    return (
+        value === 'OpenStreetMap' ||
+        value === 'OpenTopoMap' ||
+        value === 'Satellite' ||
+        value === 'Dark' ||
+        value === 'Offline'
+    );
+};
+
+const getSavedBaseLayerName = (): BaseLayerName | null => {
+    const savedBaseLayer = readLayerPreferences()?.baseLayer;
+    return isBaseLayerName(savedBaseLayer) ? savedBaseLayer : null;
+};
 
 const fetchGeoJson = async (path: string): Promise<GeoJSON.GeoJsonObject> => {
     const response = await fetch(path);
@@ -309,6 +383,216 @@ const fetchWeatherData = async (lat: number, lon: number): Promise<string> => {
     }
 };
 
+const escapeHtml = (value: unknown): string => {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+};
+
+const formatNullableNumber = (value: unknown, decimals = 1): string => {
+    return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(decimals) : 'N/A';
+};
+
+const truncateText = (value: unknown, maxLength = 200): string => {
+    const text = String(value || '').trim();
+    if (text.length <= maxLength) return text;
+    return `${text.substring(0, maxLength)}...`;
+};
+
+const formatDistance = (meters: number): string => {
+    if (meters < 1609.344) return `${Math.round(meters)} m`;
+    return `${(meters / 1609.344).toFixed(2)} mi`;
+};
+
+const getFeatureTitle = (props: Record<string, any>, group: DataGroup): string => {
+    if (group === 'Halfmile Notes') return props.name || 'Unnamed Waypoint';
+    return props.Section_Name || props.name || 'Unnamed Trail Section';
+};
+
+const getFeatureSubtitle = (props: Record<string, any>, group: DataGroup): string => {
+    if (group === 'Halfmile Notes') {
+        return [
+            props.type || 'Waypoint',
+            typeof props.pct_mile_nb === 'number' ? `PCT ${props.pct_mile_nb.toFixed(1)}` : null,
+        ]
+            .filter(Boolean)
+            .join(' · ');
+    }
+
+    return [props.Region, props.source || 'PCTA'].filter(Boolean).join(' · ');
+};
+
+const formatHalfmilePopup = (
+    props: Record<string, any>,
+    coords: GeoJSON.Position,
+    weatherContent = 'Loading weather...'
+): string => {
+    const description = truncateText(props.description);
+    const lat = typeof coords[1] === 'number' ? coords[1] : 0;
+    const lon = typeof coords[0] === 'number' ? coords[0] : 0;
+
+    return `
+        <div style="max-width: 250px; font-size: 12px;">
+          <b>${escapeHtml(props.name || 'Unnamed Waypoint')}</b><br>
+          <b>Type:</b> ${escapeHtml(props.type || 'Unknown')}<br>
+          <b>Coordinates:</b> [${formatNullableNumber(lat, 6)}, ${formatNullableNumber(lon, 6)}]<br>
+          <b>PCT Mile (NB):</b> ${formatNullableNumber(props.pct_mile_nb)}<br>
+          <b>PCT Mile (SB):</b> ${formatNullableNumber(props.pct_mile_sb)}<br>
+          <b>Elevation:</b> ${typeof props.elevation_ft === 'number' ? `${props.elevation_ft.toFixed(0)} ft` : 'N/A'}<br>
+          <b>Description:</b> ${escapeHtml(description || 'None')}<br>
+          <hr>
+          <b>Source:</b> Halfmile<br>
+          <hr>
+          <b>Weather:</b><br>
+          ${weatherContent}<br>
+          <a href="https://forecast.weather.gov/MapClick.php?lat=${lat.toFixed(6)}&lon=${lon.toFixed(6)}" target="_blank">Get More</a>
+        </div>
+    `;
+};
+
+const formatTrailPopup = (feature: IndexedFeature, distanceMeters?: number, pctMileNb?: number | null): string => {
+    const props = feature.properties;
+    const pctMileSb = pctMileNb !== undefined && pctMileNb !== null ? Math.max(0, PCT_TOTAL_MILES - pctMileNb) : null;
+    return `
+        <div style="max-width: 250px; font-size: 12px;">
+          <b>${escapeHtml(feature.title)}</b><br>
+          ${pctMileNb !== undefined && pctMileNb !== null ? `<b>PCT Mile (NB):</b> ${pctMileNb.toFixed(1)}<br>` : ''}
+          ${pctMileSb !== null ? `<b>PCT Mile (SB):</b> ${pctMileSb.toFixed(1)}<br>` : ''}
+          <b>Region:</b> ${escapeHtml(props.Region || 'Unknown')}<br>
+          <b>Source:</b> ${escapeHtml(props.source || 'PCTA')}<br>
+          ${distanceMeters !== undefined ? `<b>Distance:</b> ${formatDistance(distanceMeters)}<br>` : ''}
+        </div>
+    `;
+};
+
+const getEnabledFeatures = (): IndexedFeature[] => {
+    return Array.from(enabledFeatureIndex.values()).flat();
+};
+
+const getSearchableFeatures = (): IndexedFeature[] => {
+    const individualFeatures: IndexedFeature[] = [];
+    const pctaSections = new globalThis.Map<string, IndexedFeature>();
+
+    getEnabledFeatures().forEach((feature) => {
+        if (feature.group !== 'PCTA Trail Data') {
+            individualFeatures.push(feature);
+            return;
+        }
+
+        const sectionName = String(feature.properties.Section_Name || feature.title).trim();
+        const sectionKey = `${feature.region}:${sectionName.toLowerCase()}`;
+        const existing = pctaSections.get(sectionKey);
+        if (!existing) {
+            pctaSections.set(sectionKey, {
+                ...feature,
+                id: `pcta-section:${sectionKey}`,
+                layer: undefined,
+                lineLatLngs: feature.lineLatLngs ? [...feature.lineLatLngs] : undefined,
+                bounds: feature.bounds?.isValid()
+                    ? L.latLngBounds([feature.bounds.getSouthWest(), feature.bounds.getNorthEast()])
+                    : undefined,
+            });
+            return;
+        }
+
+        if (feature.lineLatLngs) {
+            existing.lineLatLngs = [...(existing.lineLatLngs || []), ...feature.lineLatLngs];
+        }
+        if (feature.bounds?.isValid()) {
+            if (existing.bounds?.isValid()) {
+                existing.bounds.extend(feature.bounds.getSouthWest());
+                existing.bounds.extend(feature.bounds.getNorthEast());
+            } else {
+                existing.bounds = L.latLngBounds([feature.bounds.getSouthWest(), feature.bounds.getNorthEast()]);
+            }
+        }
+        existing.searchableText = `${existing.searchableText} ${feature.searchableText}`;
+    });
+
+    return [...individualFeatures, ...pctaSections.values()];
+};
+
+const toLatLng = (coords: GeoJSON.Position): L.LatLng | null => {
+    if (typeof coords[0] !== 'number' || typeof coords[1] !== 'number') return null;
+    return L.latLng(coords[1], coords[0]);
+};
+
+const toLineLatLngs = (geometry: GeoJSON.Geometry): L.LatLng[][] => {
+    if (geometry.type === 'LineString') {
+        return [
+            geometry.coordinates
+                .map(toLatLng)
+                .filter((latlng): latlng is L.LatLng => latlng !== null),
+        ].filter((line) => line.length > 1);
+    }
+
+    if (geometry.type === 'MultiLineString') {
+        return geometry.coordinates
+            .map((line) => line.map(toLatLng).filter((latlng): latlng is L.LatLng => latlng !== null))
+            .filter((line) => line.length > 1);
+    }
+
+    return [];
+};
+
+const boundsFromLines = (lineLatLngs: L.LatLng[][]): L.LatLngBounds | undefined => {
+    const points = lineLatLngs.flat();
+    if (points.length === 0) return undefined;
+    return L.latLngBounds(points);
+};
+
+const createIndexedFeature = (
+    feature: GeoJSON.Feature,
+    layer: L.Layer,
+    dataFile: DataFile,
+    featureIndex: number
+): IndexedFeature | null => {
+    if (!feature.geometry || !feature.properties) return null;
+
+    const props = feature.properties as Record<string, any>;
+    const lineLatLngs = toLineLatLngs(feature.geometry);
+    const title = getFeatureTitle(props, dataFile.group);
+    const subtitle = getFeatureSubtitle(props, dataFile.group);
+    const common = {
+        id: `${dataFile.path}:${featureIndex}`,
+        path: dataFile.path,
+        group: dataFile.group,
+        region: dataFile.region,
+        title,
+        subtitle,
+        searchableText: [
+            title,
+            subtitle,
+            props.name,
+            props.type,
+            props.description,
+            props.Section_Name,
+            props.Region,
+            props.pct_mile_nb,
+            props.pct_mile_sb,
+        ]
+            .filter((value) => value !== undefined && value !== null)
+            .join(' ')
+            .toLowerCase(),
+        feature,
+        properties: props,
+        pctMileNb: typeof props.pct_mile_nb === 'number' ? props.pct_mile_nb : undefined,
+        layer,
+    };
+
+    if (feature.geometry.type === 'Point') {
+        const latlng = toLatLng(feature.geometry.coordinates);
+        if (!latlng) return null;
+        return { ...common, latlng, bounds: L.latLngBounds([latlng]) };
+    }
+
+    if (lineLatLngs.length === 0) return null;
+    return { ...common, lineLatLngs, bounds: boundsFromLines(lineLatLngs) };
+};
+
 // Normalize waypoint type
 const getNormalizedType = (type: string | undefined): string => {
     if (!type || type === 'Unknown' || typeof type !== 'string') return 'default';
@@ -326,52 +610,306 @@ const getNormalizedType = (type: string | undefined): string => {
     return 'default';
 };
 
-const queryFeaturesAt = async (map: LeafletMap, e: L.LeafletMouseEvent) => {
-    if (!navigator.onLine) {
-        L.popup()
-            .setLatLng(e.latlng)
-            .setContent('<b>Query Features</b><br>Feature query unavailable offline.')
-            .openOn(map);
+const lineDistanceToLatLng = (map: LeafletMap, target: L.LatLng, lineLatLngs: L.LatLng[][]): number | null => {
+    const targetPoint = map.latLngToLayerPoint(target);
+    let minPixelDistance = Infinity;
+
+    lineLatLngs.forEach((line) => {
+        for (let index = 0; index < line.length - 1; index += 1) {
+            const start = map.latLngToLayerPoint(line[index]);
+            const end = map.latLngToLayerPoint(line[index + 1]);
+            minPixelDistance = Math.min(minPixelDistance, L.LineUtil.pointToSegmentDistance(targetPoint, start, end));
+        }
+    });
+
+    if (!Number.isFinite(minPixelDistance)) return null;
+    if (minPixelDistance === 0) return 0;
+
+    const comparisonLatLng = map.layerPointToLatLng(L.point(targetPoint.x + minPixelDistance, targetPoint.y));
+    return map.distance(target, comparisonLatLng);
+};
+
+const distanceToIndexedFeature = (map: LeafletMap, target: L.LatLng, feature: IndexedFeature): number | null => {
+    if (feature.latlng) return map.distance(target, feature.latlng);
+    if (feature.lineLatLngs) return lineDistanceToLatLng(map, target, feature.lineLatLngs);
+    return null;
+};
+
+const getOrderedPctaRegionLines = (region: RegionKey): L.LatLng[][] => {
+    const remaining = getEnabledFeatures()
+        .filter((feature) => feature.group === 'PCTA Trail Data' && feature.region === region)
+        .flatMap((feature) => feature.lineLatLngs || [])
+        .map((line) => [...line])
+        .filter((line) => line.length > 1);
+
+    if (remaining.length === 0) return [];
+
+    let startIndex = 0;
+    let reverseStart = false;
+    let lowestLatitude = Infinity;
+    remaining.forEach((line, index) => {
+        const first = line[0];
+        const last = line[line.length - 1];
+        if (first.lat < lowestLatitude) {
+            lowestLatitude = first.lat;
+            startIndex = index;
+            reverseStart = false;
+        }
+        if (last.lat < lowestLatitude) {
+            lowestLatitude = last.lat;
+            startIndex = index;
+            reverseStart = true;
+        }
+    });
+
+    const route: L.LatLng[][] = [];
+    const [startLine] = remaining.splice(startIndex, 1);
+    if (reverseStart) startLine.reverse();
+    route.push(startLine);
+
+    while (remaining.length > 0) {
+        const current = route[route.length - 1][route[route.length - 1].length - 1];
+        let bestIndex = 0;
+        let bestReverse = false;
+        let bestDistance = Infinity;
+
+        remaining.forEach((line, index) => {
+            const firstDistance = current.distanceTo(line[0]);
+            const lastDistance = current.distanceTo(line[line.length - 1]);
+            if (firstDistance < bestDistance) {
+                bestIndex = index;
+                bestReverse = false;
+                bestDistance = firstDistance;
+            }
+            if (lastDistance < bestDistance) {
+                bestIndex = index;
+                bestReverse = true;
+                bestDistance = lastDistance;
+            }
+        });
+
+        const [nextLine] = remaining.splice(bestIndex, 1);
+        if (bestReverse) nextLine.reverse();
+        route.push(nextLine);
+    }
+
+    return route;
+};
+
+const estimatePctaMileAtLatLng = (map: LeafletMap, target: L.LatLng, feature: IndexedFeature): number | null => {
+    if (feature.group !== 'PCTA Trail Data') return null;
+
+    const route = getOrderedPctaRegionLines(feature.region);
+    if (route.length === 0) return null;
+
+    const targetPoint = map.latLngToLayerPoint(target);
+    let cumulativeMeters = 0;
+    let bestMetersAlongRoute = 0;
+    let bestPixelDistance = Infinity;
+
+    route.forEach((line) => {
+        for (let index = 0; index < line.length - 1; index += 1) {
+            const start = line[index];
+            const end = line[index + 1];
+            const startPoint = map.latLngToLayerPoint(start);
+            const endPoint = map.latLngToLayerPoint(end);
+            const closestPoint = L.LineUtil.closestPointOnSegment(targetPoint, startPoint, endPoint);
+            const pixelDistance = targetPoint.distanceTo(closestPoint);
+            const segmentMeters = start.distanceTo(end);
+
+            if (pixelDistance < bestPixelDistance) {
+                const closestLatLng = map.layerPointToLatLng(closestPoint);
+                const metersIntoSegment = Math.min(segmentMeters, start.distanceTo(closestLatLng));
+                bestPixelDistance = pixelDistance;
+                bestMetersAlongRoute = cumulativeMeters + metersIntoSegment;
+            }
+
+            cumulativeMeters += segmentMeters;
+        }
+    });
+
+    if (!Number.isFinite(bestPixelDistance)) return null;
+    return PCTA_REGION_START_MILES[feature.region] + bestMetersAlongRoute / 1609.344;
+};
+
+const extractNumericSearch = (query: string): number | null => {
+    const match = query.match(/(?:mile\s*)?(\d+(?:\.\d+)?)/i);
+    if (!match) return null;
+    const value = Number(match[1]);
+    return Number.isFinite(value) ? value : null;
+};
+
+const searchEnabledFeatures = (query: string): SearchResult[] => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return [];
+
+    const numericQuery = extractNumericSearch(normalized);
+    const results: SearchResult[] = [];
+
+    getSearchableFeatures().forEach((feature) => {
+        const title = feature.title.toLowerCase();
+        if (title === normalized) {
+            results.push({ feature, score: 0 });
+            return;
+        }
+        if (title.startsWith(normalized)) {
+            results.push({ feature, score: 10 });
+            return;
+        }
+        if (numericQuery !== null && feature.group === 'Halfmile Notes' && feature.pctMileNb !== undefined) {
+            const diff = Math.abs(feature.pctMileNb - numericQuery);
+            if (diff <= 2) {
+                results.push({ feature, score: 20 + diff });
+                return;
+            }
+        }
+        const matchIndex = feature.searchableText.indexOf(normalized);
+        if (matchIndex >= 0) {
+            results.push({ feature, score: 100 + matchIndex / 1000 });
+        }
+    });
+
+    return results
+        .sort((a, b) => a.score - b.score || a.feature.title.localeCompare(b.feature.title))
+        .slice(0, 10);
+};
+
+const openIndexedFeature = (map: LeafletMap, feature: IndexedFeature) => {
+    if (feature.latlng) {
+        map.setView(feature.latlng, Math.max(map.getZoom(), 14));
+        if (feature.layer && 'openPopup' in feature.layer) {
+            (feature.layer as L.Marker).openPopup();
+            return;
+        }
+        const coords = feature.feature.geometry.type === 'Point' ? feature.feature.geometry.coordinates : [feature.latlng.lng, feature.latlng.lat];
+        L.popup().setLatLng(feature.latlng).setContent(formatHalfmilePopup(feature.properties, coords)).openOn(map);
         return;
     }
 
+    if (feature.bounds?.isValid()) {
+        const center = feature.bounds.getCenter();
+        map.fitBounds(feature.bounds, { padding: [32, 32] });
+        L.popup()
+            .setLatLng(center)
+            .setContent(formatTrailPopup(feature, undefined, estimatePctaMileAtLatLng(map, center, feature)))
+            .openOn(map);
+    }
+};
+
+const formatQueryLocalResults = (map: LeafletMap, target: L.LatLng): string => {
+    const withDistances = getEnabledFeatures()
+        .map((feature) => {
+            const distance = distanceToIndexedFeature(map, target, feature);
+            return distance === null ? null : { feature, distance };
+        })
+        .filter((result): result is { feature: IndexedFeature; distance: number } => result !== null);
+
+    const halfmile = withDistances
+        .filter((result) => result.feature.group === 'Halfmile Notes' && result.distance <= 1609.344)
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, 5);
+
+    const trail = withDistances
+        .filter((result) => result.feature.group === 'PCTA Trail Data' && result.distance <= 804.672)
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, 1);
+
+    if (halfmile.length === 0 && trail.length === 0) {
+        return '<div style="margin-bottom: 12px;">No enabled map layers found near this point.</div>';
+    }
+
+    const halfmileContent = halfmile
+        .map(({ feature, distance }) => {
+            const props = feature.properties;
+            return `
+                <div style="margin: 0 0 10px;">
+                  <b>${escapeHtml(feature.title)}</b> <span style="color:#666;">(${formatDistance(distance)})</span><br>
+                  ${escapeHtml(props.type || 'Waypoint')} · PCT ${formatNullableNumber(props.pct_mile_nb)}<br>
+                  ${props.elevation_ft ? `${formatNullableNumber(props.elevation_ft, 0)} ft · ` : ''}${escapeHtml(truncateText(props.description, 120) || 'No description')}
+                </div>
+            `;
+        })
+        .join('');
+
+    const trailContent = trail
+        .map(({ feature, distance }) => {
+            const pctMileNb = estimatePctaMileAtLatLng(map, target, feature);
+            const pctMileSb = pctMileNb !== null ? Math.max(0, PCT_TOTAL_MILES - pctMileNb) : null;
+            return `
+                <div style="margin: 0 0 10px;">
+                  <b>${escapeHtml(feature.title)}</b> <span style="color:#666;">(${formatDistance(distance)})</span><br>
+                  ${pctMileNb !== null ? `PCT Mile (NB): ${pctMileNb.toFixed(1)}<br>` : ''}
+                  ${pctMileSb !== null ? `PCT Mile (SB): ${pctMileSb.toFixed(1)}<br>` : ''}
+                  ${escapeHtml(feature.subtitle || 'PCTA trail')}
+                </div>
+            `;
+        })
+        .join('');
+
+    return `
+        ${trailContent || ''}
+        ${halfmileContent || ''}
+    `;
+};
+
+const fetchMapContext = async (latlng: L.LatLng): Promise<string> => {
+    if (!navigator.onLine) return '';
+
     try {
         const response = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${e.latlng.lat}&lon=${e.latlng.lng}&zoom=18&addressdetails=1`,
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latlng.lat}&lon=${latlng.lng}&zoom=18&addressdetails=1`,
             { headers: { 'User-Agent': 'OpenPCT/1.0 (contact: example@example.com)' } }
         );
         if (!response.ok) throw new Error(`HTTP error ${response.status}`);
         const data = await response.json();
         const address = data.address || {};
-        const nearbyFeatures = address.road ? `${address.road}` : 'No nearby road found';
-        const enclosingFeatures = [
-            address.county ? `County Boundary ${address.county}` : null,
-            address.state ? `State Boundary ${address.state}` : null,
-            address.timezone || 'Timezone Unknown',
-            address.country ? `Region ${address.country}` : null,
-            address.timezone ? `Timezone ${address.timezone}` : null,
-            address.country ? `International Boundary ${address.country}` : null,
+        const featureName =
+            address.trail ||
+            address.path ||
+            address.footway ||
+            address.pedestrian ||
+            address.road ||
+            address.cycleway ||
+            address.bridleway ||
+            address.waterway ||
+            address.river ||
+            address.stream ||
+            address.lake ||
+            address.water ||
+            address.natural ||
+            address.peak ||
+            address.amenity ||
+            address.tourism ||
+            data.name;
+        const mapContext = [
+            featureName ? `Feature: ${featureName}` : null,
+            address.county ? `County: ${address.county}` : null,
+            address.state ? `State: ${address.state}` : null,
+            address.country ? `Country: ${address.country}` : null,
         ]
             .filter(Boolean)
             .join('<br>');
-        const popupContent = `
-            <b>Query Features</b><br>
-            Double-click the map to find nearby features.<br><br>
-            <b>Nearby features</b><br>
-            ${nearbyFeatures}<br><br>
-            <b>Enclosing features</b><br>
-            ${enclosingFeatures || 'No enclosing features found'}
-          `;
-        L.popup().setLatLng(e.latlng).setContent(popupContent).openOn(map);
+
+        return mapContext
+            ? `<div style="margin-top: 12px;"><b>Map context</b><br>${escapeHtml(mapContext).replace(/&lt;br&gt;/g, '<br>')}</div>`
+            : '';
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : 'Unknown error';
-        const popupContent = `
-            <b>Query Features</b><br>
-            Unable to retrieve features: ${message}<br>
-            Please try again later.
-          `;
-        L.popup().setLatLng(e.latlng).setContent(popupContent).openOn(map);
+        return `<div style="margin-top: 12px;"><b>Map context</b><br>Unavailable: ${escapeHtml(message)}</div>`;
     }
+};
+
+const queryFeaturesAt = async (map: LeafletMap, e: L.LeafletMouseEvent) => {
+    const localResults = formatQueryLocalResults(map, e.latlng);
+    const mapContext = await fetchMapContext(e.latlng);
+    const popupContent = `
+        <div style="max-width: 280px; font-size: 12px;">
+          <b>Query Features</b><br>
+          ${localResults}
+          ${mapContext}
+        </div>
+    `;
+    L.popup().setLatLng(e.latlng).setContent(popupContent).openOn(map);
 };
 
 // Extend Marker to include note property and rotation
@@ -732,6 +1270,11 @@ const LayersControl = Control.extend({
         const pendingLayerPaths = new Set<string>();
         const layerLoadVersions: Record<string, number> = {};
         const defaultOfflineInputs: Array<{ file: DataFile; input: HTMLInputElement }> = [];
+        const savedPreferences = readLayerPreferences();
+        const savedVisibleLayerPaths = Array.isArray(savedPreferences?.visibleLayerPaths)
+            ? new Set(savedPreferences.visibleLayerPaths)
+            : null;
+        const overlayInputs: HTMLInputElement[] = [];
         this._isActive = true;
 
         const isControlActive = () => {
@@ -776,8 +1319,15 @@ const LayersControl = Control.extend({
             recomputeVisibleLayerBounds();
         };
 
+        const persistVisibleLayers = () => {
+            writeLayerPreferences({
+                ...(readLayerPreferences() || {}),
+                visibleLayerPaths: overlayInputs.filter((input) => input.checked).map((input) => input.value),
+            });
+        };
+
         const baseMapSection = createSectionHeader(dropdown, 'Base map', true, '0 0 4px');
-        const baseLayerOptions = [
+        const baseLayerOptions: Array<{ name: BaseLayerName; layer: L.TileLayer }> = [
             { name: 'OpenStreetMap', layer: this.options.baseLayers.OpenStreetMap },
             { name: 'OpenTopoMap', layer: this.options.baseLayers.OpenTopoMap },
             { name: 'Satellite', layer: this.options.baseLayers.Satellite },
@@ -809,6 +1359,10 @@ const LayersControl = Control.extend({
                     if (map.hasLayer(layer)) map.removeLayer(layer);
                 });
                 map.addLayer(layer);
+                writeLayerPreferences({
+                    ...(readLayerPreferences() || {}),
+                    baseLayer: name as BaseLayerName,
+                });
             });
         });
 
@@ -820,7 +1374,8 @@ const LayersControl = Control.extend({
             groupContainers[group] = section.content;
         });
 
-        const loadOverlay = ({ path, group, region }: DataFile, input: HTMLInputElement) => {
+        const loadOverlay = (dataFile: DataFile, input: HTMLInputElement) => {
+            const { path, group, region } = dataFile;
             if (loadedLayers[path] || pendingLayerPaths.has(path)) return;
             const loadVersion = (layerLoadVersions[path] || 0) + 1;
             layerLoadVersions[path] = loadVersion;
@@ -830,6 +1385,8 @@ const LayersControl = Control.extend({
                 fetchGeoJson(path)
                     .then((data) => {
                         if (layerLoadVersions[path] !== loadVersion || !isControlActive() || !input.checked) return;
+                        const indexedEntries: IndexedFeature[] = [];
+                        let featureIndex = 0;
                         const layer = L.geoJSON(data, {
                             pointToLayer: (feature, latlng) => {
                                 if (feature.geometry.type !== 'Point') {
@@ -846,57 +1403,34 @@ const LayersControl = Control.extend({
                             },
                             style: { color: '#630000', weight: 4, opacity: 0.7 },
                             onEachFeature: (feature, layer) => {
+                                const indexedFeature = createIndexedFeature(feature, layer, dataFile, featureIndex);
+                                featureIndex += 1;
+                                if (indexedFeature) {
+                                    indexedEntries.push(indexedFeature);
+                                }
+
                                 if (feature.geometry.type !== 'Point' || !feature.properties) {
+                                    if (indexedFeature && group === 'PCTA Trail Data') {
+                                        layer.on('click', (event: L.LeafletMouseEvent) => {
+                                            const pctMile = estimatePctaMileAtLatLng(map, event.latlng, indexedFeature);
+                                            L.popup()
+                                                .setLatLng(event.latlng)
+                                                .setContent(formatTrailPopup(indexedFeature, undefined, pctMile))
+                                                .openOn(map);
+                                        });
+                                    }
                                     return;
                                 }
                                 const props = feature.properties;
                                 const coords = feature.geometry.coordinates;
-                                const maxDescLength = 200;
-                                let description = props.description || '';
-                                if (description.length > maxDescLength) {
-                                    description = description.substring(0, maxDescLength) + '...';
-                                }
-                                const initialPopupContent = `
-                        <div style="max-width: 250px; font-size: 12px;">
-                          <b>${props.name || 'Unnamed Waypoint'}</b><br>
-                          <b>Type:</b> ${props.type || 'Unknown'}<br>
-                          <b>Coordinates:</b> [${coords[1]?.toFixed(6) || 'N/A'}, ${coords[0]?.toFixed(6) || 'N/A'}]<br>
-                          <b>PCT Mile (NB):</b> ${props.pct_mile_nb?.toFixed(1) || 'N/A'}<br>
-                          <b>PCT Mile (SB):</b> ${props.pct_mile_sb?.toFixed(1) || 'N/A'}<br>
-                          <b>Elevation:</b> ${props.elevation_ft ? props.elevation_ft.toFixed(0) + ' ft' : 'N/A'}<br>
-                          <b>Description:</b> ${description || 'None'}<br>
-                          <hr>
-                          <b>Source:</b> Halfmile<br>
-                          <hr>
-                          <b>Weather:</b><br>
-                          Loading weather...<br>
-                          <a href="https://forecast.weather.gov/MapClick.php?lat=${coords[1]?.toFixed(6) || 0}&lon=${coords[0]?.toFixed(6) || 0}" target="_blank">Get More</a>
-                        </div>
-                      `;
-                                layer.bindPopup(initialPopupContent);
+                                layer.bindPopup(formatHalfmilePopup(props, coords));
                                 layer.on('popupopen', async () => {
                                     const weatherContent = await fetchWeatherData(coords[1], coords[0]);
-                                    const updatedPopupContent = `
-                          <div style="max-width: 250px; font-size: 12px;">
-                            <b>${props.name || 'Unnamed Waypoint'}</b><br>
-                            <b>Type:</b> ${props.type || 'Unknown'}<br>
-                            <b>Coordinates:</b> [${coords[1]?.toFixed(6) || 'N/A'}, ${coords[0]?.toFixed(6) || 'N/A'}]<br>
-                            <b>PCT Mile (NB):</b> ${props.pct_mile_nb?.toFixed(1) || 'N/A'}<br>
-                            <b>PCT Mile (SB):</b> ${props.pct_mile_sb?.toFixed(1) || 'N/A'}<br>
-                            <b>Elevation:</b> ${props.elevation_ft ? props.elevation_ft.toFixed(0) + ' ft' : 'N/A'}<br>
-                            <b>Description:</b> ${description || 'None'}<br>
-                            <hr>
-                            <b>Source:</b> Halfmile<br>
-                            <hr>
-                            <b>Weather:</b><br>
-                            ${weatherContent}<br>
-                            <a href="https://forecast.weather.gov/MapClick.php?lat=${coords[1]?.toFixed(6) || 0}&lon=${coords[0]?.toFixed(6) || 0}" target="_blank">Get More</a>
-                          </div>
-                        `;
-                                    layer.setPopupContent(updatedPopupContent);
+                                    layer.setPopupContent(formatHalfmilePopup(props, coords, weatherContent));
                                 });
                             },
                         });
+                        enabledFeatureIndex.set(path, indexedEntries);
                         loadedLayers[path] = layer;
                         layer.addTo(map);
                         trackEvent('map_layer_loaded', {
@@ -906,6 +1440,7 @@ const LayersControl = Control.extend({
                     })
                     .catch((error: unknown) => {
                         if (layerLoadVersions[path] !== loadVersion || !isControlActive() || !input.checked) return;
+                        enabledFeatureIndex.delete(path);
                         const message = error instanceof Error ? error.message : 'Unknown error';
                         const alertMessage = !navigator.onLine
                             ? 'This map layer is not downloaded for offline use. Reconnect and download it first.'
@@ -913,6 +1448,7 @@ const LayersControl = Control.extend({
                         console.error('Error loading GeoJSON:', error, path);
                         alert(alertMessage);
                         input.checked = false;
+                        persistVisibleLayers();
                     })
                     .finally(() => {
                         finishLayerLoad(path, loadVersion);
@@ -920,10 +1456,12 @@ const LayersControl = Control.extend({
             } catch (error: unknown) {
                 finishLayerLoad(path, loadVersion);
                 if (layerLoadVersions[path] !== loadVersion || !isControlActive() || !input.checked) return;
+                enabledFeatureIndex.delete(path);
                 const message = error instanceof Error ? error.message : 'Unknown error';
                 console.error('Error loading file:', error, path);
                 alert(`Error loading file: ${message}`);
                 input.checked = false;
+                persistVisibleLayers();
             }
         };
 
@@ -943,7 +1481,10 @@ const LayersControl = Control.extend({
             input.type = 'checkbox';
             input.name = 'openpct-overlay-layers';
             input.value = path;
-            input.checked = navigator.onLine && group === DEFAULT_VISIBLE_DATA_GROUP;
+            input.checked = savedVisibleLayerPaths !== null
+                ? savedVisibleLayerPaths.has(path)
+                : navigator.onLine && group === DEFAULT_VISIBLE_DATA_GROUP;
+            overlayInputs.push(input);
 
             const span = L.DomUtil.create('span', '', label);
             span.textContent = name;
@@ -953,22 +1494,29 @@ const LayersControl = Control.extend({
             span.style.textOverflow = 'ellipsis';
 
             L.DomEvent.on(input, 'change', () => {
+                persistVisibleLayers();
                 if (input.checked) {
                     loadOverlay(file, input);
                 } else if (loadedLayers[path]) {
                     map.removeLayer(loadedLayers[path]);
                     delete loadedLayers[path];
+                    enabledFeatureIndex.delete(path);
                     recomputeVisibleLayerBounds();
                 } else if (pendingLayerPaths.has(path)) {
                     layerLoadVersions[path] = (layerLoadVersions[path] || 0) + 1;
                     pendingLayerPaths.delete(path);
+                    enabledFeatureIndex.delete(path);
                     recomputeVisibleLayerBounds();
                 }
             });
 
             if (input.checked) {
-                loadOverlay(file, input);
-            } else if (!navigator.onLine && group === DEFAULT_VISIBLE_DATA_GROUP) {
+                if (navigator.onLine) {
+                    loadOverlay(file, input);
+                } else {
+                    defaultOfflineInputs.push({ file, input });
+                }
+            } else if (!navigator.onLine && savedVisibleLayerPaths === null && group === DEFAULT_VISIBLE_DATA_GROUP) {
                 defaultOfflineInputs.push({ file, input });
             }
         });
@@ -979,7 +1527,10 @@ const LayersControl = Control.extend({
                 .then((statuses) => {
                     if (!isControlActive()) return;
                     defaultOfflineInputs.forEach(({ file, input }) => {
-                        if (statuses[file.path] !== 'downloaded') return;
+                        if (statuses[file.path] !== 'downloaded') {
+                            input.checked = false;
+                            return;
+                        }
                         input.checked = true;
                         loadOverlay(file, input);
                     });
@@ -1007,10 +1558,159 @@ const LayersControl = Control.extend({
     },
     onRemove: function () {
         this._isActive = false;
+        dataFiles.forEach((file) => enabledFeatureIndex.delete(file.path));
         const closeDropdown = () => {
             // No-op, handled in onAdd
         };
         L.DomEvent.off(document as any, 'click', closeDropdown);
+    },
+});
+
+const SearchControl = Control.extend({
+    options: { position: 'topleft' } as ControlOptions,
+    onAdd: function (map: LeafletMap) {
+        const navbarSearchSlot = document.getElementById('openpct-navbar-search');
+        const containerClassName = navbarSearchSlot
+            ? 'navbar-search-control-openpct'
+            : 'leaflet-control leaflet-control-search-openpct';
+        const container = L.DomUtil.create('div', containerClassName);
+
+        if (!navbarSearchSlot) {
+            container.style.width = '220px';
+            container.style.marginBottom = '2px';
+            container.style.background = '#fff';
+            container.style.border = '2px solid rgba(60, 60, 60, 0.5)';
+            container.style.borderRadius = '2px';
+            container.style.boxSizing = 'border-box';
+            container.style.position = 'relative';
+        }
+
+        const input = L.DomUtil.create('input', '', container);
+        input.type = 'search';
+        input.placeholder = 'Search';
+        input.setAttribute('aria-label', 'Search enabled map layers');
+        if (!navbarSearchSlot) {
+            input.style.width = '100%';
+            input.style.height = '28px';
+            input.style.border = '0';
+            input.style.padding = '0 8px';
+            input.style.boxSizing = 'border-box';
+            input.style.fontSize = '12px';
+            input.style.outline = 'none';
+        }
+
+        const resultsContainer = L.DomUtil.create('div', 'openpct-search-results', container);
+        if (!navbarSearchSlot) {
+            resultsContainer.style.left = '0';
+            resultsContainer.style.right = 'auto';
+        }
+
+        const hideResults = () => {
+            resultsContainer.style.display = 'none';
+        };
+
+        const renderMessage = (message: string) => {
+            resultsContainer.innerHTML = '';
+            const row = L.DomUtil.create('div', '', resultsContainer);
+            row.textContent = message;
+            row.style.padding = '8px';
+            row.style.color = '#666';
+            row.style.fontSize = '12px';
+            resultsContainer.style.display = 'block';
+        };
+
+        const renderResults = () => {
+            const query = input.value.trim();
+            if (!query) {
+                hideResults();
+                return;
+            }
+
+            if (getEnabledFeatures().length === 0) {
+                renderMessage('Enable a layer to search.');
+                return;
+            }
+
+            const results = searchEnabledFeatures(query);
+            if (results.length === 0) {
+                renderMessage('No enabled layer results.');
+                return;
+            }
+
+            resultsContainer.innerHTML = '';
+            results.forEach(({ feature }) => {
+                const row = L.DomUtil.create('button', '', resultsContainer);
+                row.type = 'button';
+                row.style.display = 'block';
+                row.style.width = '100%';
+                row.style.padding = '7px 8px';
+                row.style.border = '0';
+                row.style.borderBottom = '1px solid rgba(60, 60, 60, 0.12)';
+                row.style.background = '#fff';
+                row.style.color = '#222';
+                row.style.cursor = 'pointer';
+                row.style.textAlign = 'left';
+                row.style.fontSize = '13px';
+                row.style.lineHeight = '1.25';
+
+                const title = L.DomUtil.create('div', '', row);
+                title.textContent = feature.title;
+                title.style.fontWeight = '700';
+
+                const subtitle = L.DomUtil.create('div', '', row);
+                subtitle.textContent = feature.subtitle || feature.group;
+                subtitle.style.color = '#666';
+                subtitle.style.marginTop = '2px';
+                subtitle.style.whiteSpace = 'normal';
+
+                L.DomEvent.on(row, 'click', (event: Event) => {
+                    L.DomEvent.stopPropagation(event);
+                    hideResults();
+                    input.blur();
+                    openIndexedFeature(map, feature);
+                });
+            });
+            resultsContainer.style.display = 'block';
+        };
+
+        L.DomEvent.on(input, 'input', renderResults);
+        L.DomEvent.on(input, 'focus', renderResults);
+        L.DomEvent.on(input, 'keydown', (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                hideResults();
+                input.blur();
+            }
+        });
+
+        L.DomEvent.on(container, 'click', L.DomEvent.stopPropagation);
+        L.DomEvent.on(container, 'dblclick', L.DomEvent.stopPropagation);
+        L.DomEvent.on(container, 'mousedown', L.DomEvent.stopPropagation);
+
+        const closeDropdown = () => {
+            hideResults();
+        };
+        L.DomEvent.on(document as any, 'click', closeDropdown);
+
+        this._searchContainer = container;
+        this._closeSearchDropdown = closeDropdown;
+
+        if (navbarSearchSlot) {
+            navbarSearchSlot.innerHTML = '';
+            navbarSearchSlot.appendChild(container);
+            const anchor = L.DomUtil.create('div', 'leaflet-control-search-openpct-anchor');
+            anchor.style.display = 'none';
+            return anchor;
+        }
+
+        return container;
+    },
+    onRemove: function () {
+        if (this._closeSearchDropdown) {
+            L.DomEvent.off(document as any, 'click', this._closeSearchDropdown);
+        }
+        if (this._searchContainer?.parentElement) {
+            this._searchContainer.parentElement.removeChild(this._searchContainer);
+        }
     },
 });
 
@@ -1465,7 +2165,12 @@ const Map = () => {
         console.log('Map useEffect: Initializing map');
         try {
             isMapActive.current = true;
-            const defaultBaseLayer = navigator.onLine ? baseLayers.Satellite : baseLayers.Offline;
+            const savedBaseLayerName = getSavedBaseLayerName();
+            const defaultBaseLayer = savedBaseLayerName
+                ? baseLayers[savedBaseLayerName]
+                : navigator.onLine
+                    ? baseLayers.Satellite
+                    : baseLayers.Offline;
             map.current = L.map(mapContainer.current, {
                 center: DEFAULT_MAP_CENTER,
                 zoom: DEFAULT_MAP_ZOOM,
@@ -1481,6 +2186,7 @@ const Map = () => {
                     baseLayers,
                     isActive: () => isMapActive.current,
                 } as LayersControlOptions));
+                map.current.addControl(new SearchControl({ position: 'topleft' }));
                 map.current.addControl(new DownloadsControl({ position: 'topleft' }));
                 map.current.addControl(new AnnotateControl({ position: 'topleft', drawnItems: drawnItems.current } as AnnotateControlOptions));
                 map.current.addControl(new UiToggleControl({ position: 'topleft' }));
@@ -1575,10 +2281,18 @@ const Map = () => {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [drawnFeatures]);
 
+    const showControls = () => {
+        document.body.classList.remove('openpct-ui-hidden');
+        trackEvent('ui_shown');
+    };
+
     return (
         <div className="map-wrapper">
             <div ref={mapContainer} className="map-container" />
             <div className="openpct-hide-hint">Press H or Esc to show controls</div>
+            <button className="openpct-exit-hidden-button" type="button" onClick={showControls}>
+                Show controls
+            </button>
             <img src="/favicon.svg" className="openpct-hidden-logo" alt="OpenPCT" />
         </div>
     );

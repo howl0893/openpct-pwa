@@ -60,6 +60,13 @@ const configuredDataFile = (
 
 const GEOJSON_BASE_URL = envValue('VITE_OPENPCT_GEOJSON_BASE_URL', '/geojson');
 const LEAFLET_ICON_BASE_URL = envValue('VITE_OPENPCT_LEAFLET_ICON_BASE_URL', '/leaflet');
+const DEFAULT_MAP_CENTER: L.LatLngExpression = [40.8, -120.0];
+const DEFAULT_MAP_ZOOM = 5;
+const DEFAULT_PCT_BOUNDS: L.LatLngBoundsExpression = [
+    [32.45, -124.4],
+    [49.15, -116.2],
+];
+const DEFAULT_VISIBLE_DATA_GROUP: DataGroup = 'PCTA Trail Data';
 
 const regions: Region[] = [
     { key: 'socal', name: 'Southern California' },
@@ -428,6 +435,7 @@ const LocationControl = Control.extend({
 
 interface LayersControlOptions extends ControlOptions {
     baseLayers: { [key: string]: L.TileLayer };
+    isActive?: () => boolean;
 }
 
 const styleTextControl = (container: HTMLElement, width: string) => {
@@ -721,20 +729,51 @@ const LayersControl = Control.extend({
 
         const files = dataFiles;
         const loadedLayers: { [key: string]: L.Layer } = {};
+        const pendingLayerPaths = new Set<string>();
+        const layerLoadVersions: Record<string, number> = {};
+        const defaultOfflineInputs: Array<{ file: DataFile; input: HTMLInputElement }> = [];
+        this._isActive = true;
 
-        const updateMapBounds = () => {
-            const bounds: L.LatLngBounds[] = [];
-            Object.values(loadedLayers).forEach((layer) => {
-                if ('getBounds' in layer) {
-                    bounds.push((layer as any).getBounds());
-                }
-            });
+        const isControlActive = () => {
+            const currentMap = map as LeafletMap & { _container?: HTMLElement };
+            return this._isActive !== false && Boolean(currentMap._container) && (!this.options.isActive || this.options.isActive());
+        };
+
+        const getValidLayerBounds = (layer: L.Layer): L.LatLngBounds | null => {
+            if (!('getBounds' in layer)) return null;
+
+            try {
+                const bounds = (layer as L.FeatureGroup).getBounds();
+                if (bounds && bounds.isValid()) return bounds;
+            } catch (error) {
+                console.warn('Skipping layer with invalid bounds:', error);
+            }
+
+            return null;
+        };
+
+        const recomputeVisibleLayerBounds = () => {
+            if (!isControlActive() || pendingLayerPaths.size > 0) return;
+
+            const bounds = Object.values(loadedLayers)
+                .map(getValidLayerBounds)
+                .filter((layerBounds): layerBounds is L.LatLngBounds => layerBounds !== null);
+
             if (bounds.length > 0) {
                 const combinedBounds = bounds.reduce((acc, curr) => acc.extend(curr), bounds[0]);
-                map.fitBounds(combinedBounds);
-            } else {
-                map.setView([39, -98], 3);
+                if (combinedBounds.isValid()) {
+                    map.fitBounds(combinedBounds);
+                    return;
+                }
             }
+
+            map.fitBounds(DEFAULT_PCT_BOUNDS, { padding: [24, 24] });
+        };
+
+        const finishLayerLoad = (path: string, loadVersion: number) => {
+            if (layerLoadVersions[path] !== loadVersion) return;
+            pendingLayerPaths.delete(path);
+            recomputeVisibleLayerBounds();
         };
 
         const baseMapSection = createSectionHeader(dropdown, 'Base map', true, '0 0 4px');
@@ -781,61 +820,43 @@ const LayersControl = Control.extend({
             groupContainers[group] = section.content;
         });
 
-        files.forEach(({ name, path, group, region }) => {
-            const groupContent = groupContainers[group] || dropdown;
-            const label = L.DomUtil.create('label', '', groupContent);
-            label.style.display = 'grid';
-            label.style.gridTemplateColumns = 'auto 1fr';
-            label.style.columnGap = '5px';
-            label.style.alignItems = 'center';
-            label.style.margin = '5px 0';
-            label.style.cursor = 'pointer';
-            label.title = name;
+        const loadOverlay = ({ path, group, region }: DataFile, input: HTMLInputElement) => {
+            if (loadedLayers[path] || pendingLayerPaths.has(path)) return;
+            const loadVersion = (layerLoadVersions[path] || 0) + 1;
+            layerLoadVersions[path] = loadVersion;
+            pendingLayerPaths.add(path);
 
-            const input = L.DomUtil.create('input', '', label);
-            input.type = 'checkbox';
-            input.name = 'openpct-overlay-layers';
-            input.value = path;
-
-            const span = L.DomUtil.create('span', '', label);
-            span.textContent = name;
-            span.style.minWidth = '0';
-            span.style.whiteSpace = 'nowrap';
-            span.style.overflow = 'hidden';
-            span.style.textOverflow = 'ellipsis';
-
-            L.DomEvent.on(input, 'change', () => {
-                if (input.checked) {
-                    try {
-                        fetchGeoJson(path)
-                            .then((data) => {
-                                const layer = L.geoJSON(data, {
-                                    pointToLayer: (feature, latlng) => {
-                                        if (feature.geometry.type !== 'Point') {
-                                            console.warn('Skipping non-point feature:', feature);
-                                            return null as any; // Type workaround
-                                        }
-                                        if (!feature.properties) {
-                                            console.warn('Feature missing properties:', feature);
-                                            return L.marker(latlng, { icon: iconMap.default });
-                                        }
-                                        const type = getNormalizedType(feature.properties.type);
-                                        const icon = iconMap[type] || iconMap.default;
-                                        return L.marker(latlng, { icon });
-                                    },
-                                    style: { color: '#630000', weight: 4, opacity: 0.7 },
-                                    onEachFeature: (feature, layer) => {
-                                        if (feature.geometry.type !== 'Point' || !feature.properties) {
-                                            return;
-                                        }
-                                        const props = feature.properties;
-                                        const coords = feature.geometry.coordinates;
-                                        const maxDescLength = 200;
-                                        let description = props.description || '';
-                                        if (description.length > maxDescLength) {
-                                            description = description.substring(0, maxDescLength) + '...';
-                                        }
-                                        const initialPopupContent = `
+            try {
+                fetchGeoJson(path)
+                    .then((data) => {
+                        if (layerLoadVersions[path] !== loadVersion || !isControlActive() || !input.checked) return;
+                        const layer = L.geoJSON(data, {
+                            pointToLayer: (feature, latlng) => {
+                                if (feature.geometry.type !== 'Point') {
+                                    console.warn('Skipping non-point feature:', feature);
+                                    return null as any; // Type workaround
+                                }
+                                if (!feature.properties) {
+                                    console.warn('Feature missing properties:', feature);
+                                    return L.marker(latlng, { icon: iconMap.default });
+                                }
+                                const type = getNormalizedType(feature.properties.type);
+                                const icon = iconMap[type] || iconMap.default;
+                                return L.marker(latlng, { icon });
+                            },
+                            style: { color: '#630000', weight: 4, opacity: 0.7 },
+                            onEachFeature: (feature, layer) => {
+                                if (feature.geometry.type !== 'Point' || !feature.properties) {
+                                    return;
+                                }
+                                const props = feature.properties;
+                                const coords = feature.geometry.coordinates;
+                                const maxDescLength = 200;
+                                let description = props.description || '';
+                                if (description.length > maxDescLength) {
+                                    description = description.substring(0, maxDescLength) + '...';
+                                }
+                                const initialPopupContent = `
                         <div style="max-width: 250px; font-size: 12px;">
                           <b>${props.name || 'Unnamed Waypoint'}</b><br>
                           <b>Type:</b> ${props.type || 'Unknown'}<br>
@@ -852,10 +873,10 @@ const LayersControl = Control.extend({
                           <a href="https://forecast.weather.gov/MapClick.php?lat=${coords[1]?.toFixed(6) || 0}&lon=${coords[0]?.toFixed(6) || 0}" target="_blank">Get More</a>
                         </div>
                       `;
-                                        layer.bindPopup(initialPopupContent);
-                                        layer.on('popupopen', async () => {
-                                            const weatherContent = await fetchWeatherData(coords[1], coords[0]);
-                                            const updatedPopupContent = `
+                                layer.bindPopup(initialPopupContent);
+                                layer.on('popupopen', async () => {
+                                    const weatherContent = await fetchWeatherData(coords[1], coords[0]);
+                                    const updatedPopupContent = `
                           <div style="max-width: 250px; font-size: 12px;">
                             <b>${props.name || 'Unnamed Waypoint'}</b><br>
                             <b>Type:</b> ${props.type || 'Unknown'}<br>
@@ -872,40 +893,101 @@ const LayersControl = Control.extend({
                             <a href="https://forecast.weather.gov/MapClick.php?lat=${coords[1]?.toFixed(6) || 0}&lon=${coords[0]?.toFixed(6) || 0}" target="_blank">Get More</a>
                           </div>
                         `;
-                                            layer.setPopupContent(updatedPopupContent);
-                                        });
-                                    },
-                                }).addTo(map);
-                                loadedLayers[path] = layer;
-                                map.addLayer(layer);
-                                updateMapBounds();
-                                trackEvent('map_layer_loaded', {
-                                    layer_group: group,
-                                    region,
+                                    layer.setPopupContent(updatedPopupContent);
                                 });
-                            })
-                            .catch((error: unknown) => {
-                                const message = error instanceof Error ? error.message : 'Unknown error';
-                                const alertMessage = !navigator.onLine
-                                    ? 'This map layer is not downloaded for offline use. Reconnect and download it first.'
-                                    : `Error loading GeoJSON file: ${message}`;
-                                console.error('Error loading GeoJSON:', error, path);
-                                alert(alertMessage);
-                                input.checked = false;
-                            });
-                    } catch (error: unknown) {
+                            },
+                        });
+                        loadedLayers[path] = layer;
+                        layer.addTo(map);
+                        trackEvent('map_layer_loaded', {
+                            layer_group: group,
+                            region,
+                        });
+                    })
+                    .catch((error: unknown) => {
+                        if (layerLoadVersions[path] !== loadVersion || !isControlActive() || !input.checked) return;
                         const message = error instanceof Error ? error.message : 'Unknown error';
-                        console.error('Error loading file:', error, path);
-                        alert(`Error loading file: ${message}`);
+                        const alertMessage = !navigator.onLine
+                            ? 'This map layer is not downloaded for offline use. Reconnect and download it first.'
+                            : `Error loading GeoJSON file: ${message}`;
+                        console.error('Error loading GeoJSON:', error, path);
+                        alert(alertMessage);
                         input.checked = false;
-                    }
+                    })
+                    .finally(() => {
+                        finishLayerLoad(path, loadVersion);
+                    });
+            } catch (error: unknown) {
+                finishLayerLoad(path, loadVersion);
+                if (layerLoadVersions[path] !== loadVersion || !isControlActive() || !input.checked) return;
+                const message = error instanceof Error ? error.message : 'Unknown error';
+                console.error('Error loading file:', error, path);
+                alert(`Error loading file: ${message}`);
+                input.checked = false;
+            }
+        };
+
+        files.forEach((file) => {
+            const { name, path, group } = file;
+            const groupContent = groupContainers[group] || dropdown;
+            const label = L.DomUtil.create('label', '', groupContent);
+            label.style.display = 'grid';
+            label.style.gridTemplateColumns = 'auto 1fr';
+            label.style.columnGap = '5px';
+            label.style.alignItems = 'center';
+            label.style.margin = '5px 0';
+            label.style.cursor = 'pointer';
+            label.title = name;
+
+            const input = L.DomUtil.create('input', '', label);
+            input.type = 'checkbox';
+            input.name = 'openpct-overlay-layers';
+            input.value = path;
+            input.checked = navigator.onLine && group === DEFAULT_VISIBLE_DATA_GROUP;
+
+            const span = L.DomUtil.create('span', '', label);
+            span.textContent = name;
+            span.style.minWidth = '0';
+            span.style.whiteSpace = 'nowrap';
+            span.style.overflow = 'hidden';
+            span.style.textOverflow = 'ellipsis';
+
+            L.DomEvent.on(input, 'change', () => {
+                if (input.checked) {
+                    loadOverlay(file, input);
                 } else if (loadedLayers[path]) {
                     map.removeLayer(loadedLayers[path]);
                     delete loadedLayers[path];
-                    updateMapBounds();
+                    recomputeVisibleLayerBounds();
+                } else if (pendingLayerPaths.has(path)) {
+                    layerLoadVersions[path] = (layerLoadVersions[path] || 0) + 1;
+                    pendingLayerPaths.delete(path);
+                    recomputeVisibleLayerBounds();
                 }
             });
+
+            if (input.checked) {
+                loadOverlay(file, input);
+            } else if (!navigator.onLine && group === DEFAULT_VISIBLE_DATA_GROUP) {
+                defaultOfflineInputs.push({ file, input });
+            }
         });
+
+        if (defaultOfflineInputs.length > 0) {
+            const offlineDefaultPaths = defaultOfflineInputs.map(({ file }) => file.path);
+            getMapDataCacheStatus(offlineDefaultPaths)
+                .then((statuses) => {
+                    if (!isControlActive()) return;
+                    defaultOfflineInputs.forEach(({ file, input }) => {
+                        if (statuses[file.path] !== 'downloaded') return;
+                        input.checked = true;
+                        loadOverlay(file, input);
+                    });
+                })
+                .catch((error) => {
+                    console.error('Error checking downloaded startup layers:', error);
+                });
+        }
 
         L.DomEvent.on(button, 'click', (e: Event) => {
             L.DomEvent.stopPropagation(e);
@@ -924,6 +1006,7 @@ const LayersControl = Control.extend({
         return container;
     },
     onRemove: function () {
+        this._isActive = false;
         const closeDropdown = () => {
             // No-op, handled in onAdd
         };
@@ -1159,6 +1242,7 @@ const DownloadsControl = Control.extend({
 const Map = () => {
     const mapContainer = useRef<HTMLDivElement>(null);
     const map = useRef<L.Map | null>(null);
+    const isMapActive = useRef(false);
     const drawControl = useRef<L.Control.Draw | null>(null);
     const drawnItems = useRef(new L.FeatureGroup());
     const userMarker = useRef<CustomMarker | null>(null);
@@ -1380,17 +1464,23 @@ const Map = () => {
 
         console.log('Map useEffect: Initializing map');
         try {
+            isMapActive.current = true;
+            const defaultBaseLayer = navigator.onLine ? baseLayers.Satellite : baseLayers.Offline;
             map.current = L.map(mapContainer.current, {
-                center: [39, -98],
-                zoom: 4,
-                layers: [navigator.onLine ? baseLayers.OpenStreetMap : baseLayers.Offline, drawnItems.current],
+                center: DEFAULT_MAP_CENTER,
+                zoom: DEFAULT_MAP_ZOOM,
+                layers: [defaultBaseLayer, drawnItems.current],
                 zoomControl: false,
                 doubleClickZoom: false,
             });
 
             if (map.current) {
                 map.current.addControl(new L.Control.Zoom({ position: 'topright' }));
-                map.current.addControl(new LayersControl({ position: 'topleft', baseLayers } as LayersControlOptions));
+                map.current.addControl(new LayersControl({
+                    position: 'topleft',
+                    baseLayers,
+                    isActive: () => isMapActive.current,
+                } as LayersControlOptions));
                 map.current.addControl(new DownloadsControl({ position: 'topleft' }));
                 map.current.addControl(new AnnotateControl({ position: 'topleft', drawnItems: drawnItems.current } as AnnotateControlOptions));
                 map.current.addControl(new UiToggleControl({ position: 'topleft' }));
@@ -1439,6 +1529,7 @@ const Map = () => {
                     void queryFeaturesAt(map.current as LeafletMap, e);
                 });
 
+                map.current.fitBounds(DEFAULT_PCT_BOUNDS, { padding: [24, 24] });
                 map.current.invalidateSize();
 
                 const handleResize = () => {
@@ -1448,13 +1539,10 @@ const Map = () => {
                 };
                 window.addEventListener('resize', handleResize);
 
-                if (!navigator.onLine) {
-                    alert('Offline mode: Only cached GeoJSON data is available. Select "Offline" layer for best experience.');
-                }
-
                 console.log('Map useEffect: Map initialized');
                 return () => {
                     console.log('Map useEffect: Cleaning up');
+                    isMapActive.current = false;
                     window.removeEventListener('resize', handleResize);
                     document.body.classList.remove('openpct-ui-hidden');
                     if (map.current) map.current.remove();
@@ -1462,6 +1550,7 @@ const Map = () => {
                 };
             }
         } catch (error) {
+            isMapActive.current = false;
             console.error('Map useEffect: Failed to initialize map', error);
         }
     }, []);

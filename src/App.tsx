@@ -8,6 +8,7 @@ import { trackEvent } from './analytics.ts';
 function App() {
   const [deferredPrompt, setDeferredPrompt] = useState<Event | null>(null);
   const [isIOS, setIsIOS] = useState(false);
+  const [isOffline, setIsOffline] = useState(() => !navigator.onLine);
 
   useEffect(() => {
     // Detect iOS
@@ -27,6 +28,20 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    const updateOnlineStatus = () => {
+      setIsOffline(!navigator.onLine);
+    };
+
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+
+    return () => {
+      window.removeEventListener('online', updateOnlineStatus);
+      window.removeEventListener('offline', updateOnlineStatus);
+    };
+  }, []);
+
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
     (deferredPrompt as any).prompt();
@@ -41,6 +56,7 @@ function App() {
       <Navbar
         isInstallable={deferredPrompt !== null}
         isIOS={isIOS}
+        isOffline={isOffline}
         handleInstallClick={handleInstallClick}
       />
       <main>

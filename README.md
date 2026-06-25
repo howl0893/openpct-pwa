@@ -207,6 +207,7 @@ Verified locally on June 25, 2026:
 - No `.env` file is required for the current local startup path.
 - The PWA precaches the app shell, icons, manifest, Leaflet marker images, JS, CSS, and HTML so the installed app can reopen offline.
 - GeoJSON map data is not automatically precached. Use **Downloads > Trail data** to download a region bundle for offline map use. Each region bundle stores both the PCTA trail GeoJSON and Halfmile notes GeoJSON in the browser Cache API.
+- The default online map opens on the Satellite basemap, frames the full PCT from the Mexican border to the Canadian border, and loads all PCTA trail overlays. Halfmile note overlays are available in **Layers** but are off by default.
 - Use **Layers** for visible map choices: basemap, PCTA trail overlays, and Halfmile note overlays. Use **Downloads** for saved-for-offline data. Download actions show a download icon when data is missing and a trash icon when it is saved.
 - Use the square map UI toggle or press `H` to hide the header and map controls. Press `H` or `Esc` to show them again.
 - Double-click the map to query nearby features. This requires network access.

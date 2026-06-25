@@ -29,21 +29,31 @@
 .navbar-actions {
   display: flex;
   align-items: center;
-  gap: 10px; /* Space between buttons/messages */
+  gap: 12px;
 }
 
-.install-button {
-  /* background-color: #fff; */
-  color: #000;
-  border: 2px solid rgba(60, 60, 60, 0.5);
-  border-radius: 2px;
-  padding: 2px 2px;
+.install-link {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: #222;
   cursor: pointer;
   font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 0;
 }
 
-.install-button:hover {
-  background-color: rgba(106, 106, 106, 0.68);
+.install-link:hover {
+  text-decoration: underline;
+}
+
+.offline-status {
+  color: #630000;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .ios-install-message {
@@ -55,9 +65,12 @@
 
 /* Responsive adjustments */
 @media (min-width: 768px) {
-  .install-button {
-    font-size: 16px;
-    padding: 10px 20px;
+  .install-link {
+    font-size: 14px;
+  }
+
+  .offline-status {
+    font-size: 14px;
   }
 
   .ios-install-message {

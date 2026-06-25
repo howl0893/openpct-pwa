@@ -4,10 +4,11 @@ import './Navbar.css';
 interface NavbarProps {
   isInstallable: boolean;
   isIOS: boolean;
+  isOffline: boolean;
   handleInstallClick: () => void;
 }
 
-function Navbar({ isInstallable, isIOS, handleInstallClick }: NavbarProps) {
+function Navbar({ isInstallable, isIOS, isOffline, handleInstallClick }: NavbarProps) {
   const handleInstall = () => {
     if (isInstallable) {
       handleInstallClick();
@@ -28,7 +29,8 @@ function Navbar({ isInstallable, isIOS, handleInstallClick }: NavbarProps) {
         <img src={appLogo} className="logo" alt="OpenPCT PWA logo" />
       </div>
       <div className="navbar-actions">
-        <button onClick={handleInstall} className="install-button" title="Install OpenPCT">
+        {isOffline && <span className="offline-status">Offline mode</span>}
+        <button onClick={handleInstall} className="install-link" title="Install OpenPCT">
           Install
         </button>
       </div>

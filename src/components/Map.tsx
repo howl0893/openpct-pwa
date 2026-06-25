@@ -3,20 +3,134 @@ import L, { Control, ControlOptions, Icon, Map as LeafletMap, Marker, LatLng } f
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import 'leaflet-draw';
-import {GPX} from 'leaflet-gpx';
 import './Map.css';
 
 // Configuration
-const USE_GEOJSON = true;
+const env = import.meta.env;
 const POLL_INTERVAL = 3000; // Poll GPS every 5 seconds
 const HEADING_THRESHOLD = 1; // Minimum heading change (degrees) to update marker
+
+type DataFile = {
+    name: string;
+    path: string;
+};
+
+const envValue = (key: keyof ImportMetaEnv, fallback: string): string => {
+    const value = env[key];
+    if (value === undefined) return fallback;
+    const trimmed = value.trim();
+    return trimmed === '' ? fallback : trimmed;
+};
+
+const joinUrl = (baseUrl: string, path: string): string => {
+    const cleanBase = baseUrl.replace(/\/+$/, '');
+    const cleanPath = path.replace(/^\/+/, '');
+    return cleanBase ? `${cleanBase}/${cleanPath}` : `/${cleanPath}`;
+};
+
+const configuredDataFile = (
+    labelKey: keyof ImportMetaEnv,
+    urlKey: keyof ImportMetaEnv,
+    fallbackLabel: string,
+    fallbackUrl: string
+): DataFile | null => {
+    const name = envValue(labelKey, fallbackLabel);
+    const path = envValue(urlKey, fallbackUrl);
+    return path ? { name, path } : null;
+};
+
+const GEOJSON_BASE_URL = envValue('VITE_OPENPCT_GEOJSON_BASE_URL', '/geojson');
+const LEAFLET_ICON_BASE_URL = envValue('VITE_OPENPCT_LEAFLET_ICON_BASE_URL', '/leaflet');
+
+const dataFiles: DataFile[] = [
+    configuredDataFile(
+        'VITE_OPENPCT_TRAIL_SOCAL_LABEL',
+        'VITE_OPENPCT_TRAIL_SOCAL_GEOJSON_URL',
+        'PCTA Southern California',
+        joinUrl(GEOJSON_BASE_URL, 'trail/socal.geojson')
+    ),
+    configuredDataFile(
+        'VITE_OPENPCT_TRAIL_CENTRAL_LABEL',
+        'VITE_OPENPCT_TRAIL_CENTRAL_GEOJSON_URL',
+        'PCTA Central California',
+        joinUrl(GEOJSON_BASE_URL, 'trail/central.geojson')
+    ),
+    configuredDataFile(
+        'VITE_OPENPCT_TRAIL_NOCAL_LABEL',
+        'VITE_OPENPCT_TRAIL_NOCAL_GEOJSON_URL',
+        'PCTA Northern California',
+        joinUrl(GEOJSON_BASE_URL, 'trail/nocal.geojson')
+    ),
+    configuredDataFile(
+        'VITE_OPENPCT_TRAIL_OR_LABEL',
+        'VITE_OPENPCT_TRAIL_OR_GEOJSON_URL',
+        'PCTA Oregon',
+        joinUrl(GEOJSON_BASE_URL, 'trail/or.geojson')
+    ),
+    configuredDataFile(
+        'VITE_OPENPCT_TRAIL_WA_LABEL',
+        'VITE_OPENPCT_TRAIL_WA_GEOJSON_URL',
+        'PCTA Washington',
+        joinUrl(GEOJSON_BASE_URL, 'trail/wa.geojson')
+    ),
+    configuredDataFile(
+        'VITE_OPENPCT_HALFMILE_SOCAL_LABEL',
+        'VITE_OPENPCT_HALFMILE_SOCAL_GEOJSON_URL',
+        'Halfmile Southern California Notes',
+        joinUrl(GEOJSON_BASE_URL, 'halfmile/socal.geojson')
+    ),
+    configuredDataFile(
+        'VITE_OPENPCT_HALFMILE_CENTRAL_LABEL',
+        'VITE_OPENPCT_HALFMILE_CENTRAL_GEOJSON_URL',
+        'Halfmile Central California Notes',
+        joinUrl(GEOJSON_BASE_URL, 'halfmile/central.geojson')
+    ),
+    configuredDataFile(
+        'VITE_OPENPCT_HALFMILE_NOCAL_LABEL',
+        'VITE_OPENPCT_HALFMILE_NOCAL_GEOJSON_URL',
+        'Halfmile Northern California Notes',
+        joinUrl(GEOJSON_BASE_URL, 'halfmile/nocal.geojson')
+    ),
+    configuredDataFile(
+        'VITE_OPENPCT_HALFMILE_OR_LABEL',
+        'VITE_OPENPCT_HALFMILE_OR_GEOJSON_URL',
+        'Halfmile Oregon Notes',
+        joinUrl(GEOJSON_BASE_URL, 'halfmile/or.geojson')
+    ),
+    configuredDataFile(
+        'VITE_OPENPCT_HALFMILE_WA_LABEL',
+        'VITE_OPENPCT_HALFMILE_WA_GEOJSON_URL',
+        'Halfmile Washington Notes',
+        joinUrl(GEOJSON_BASE_URL, 'halfmile/wa.geojson')
+    ),
+].filter((file): file is DataFile => file !== null);
+
+const fetchGeoJson = async (path: string): Promise<GeoJSON.GeoJsonObject> => {
+    const response = await fetch(path);
+    const text = await response.text();
+
+    if (!response.ok) {
+        throw new Error(`HTTP ${response.status} while loading ${path}`);
+    }
+
+    if (text.trimStart().startsWith('<!DOCTYPE') || text.trimStart().startsWith('<html')) {
+        throw new Error(`Expected GeoJSON but received HTML for ${path}. Check that the file exists or update the VITE_OPENPCT_* URL.`);
+    }
+
+    try {
+        return JSON.parse(text);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Invalid JSON';
+        throw new Error(`Invalid GeoJSON at ${path}: ${message}`);
+    }
+};
 
 // Fix Leaflet default marker icon issue
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
-    iconRetinaUrl: '/leaflet/marker-icon-2x.png',
-    iconUrl: '/leaflet/marker-icon.png',
-    shadowUrl: '/leaflet/marker-shadow.png',
+    iconRetinaUrl: joinUrl(LEAFLET_ICON_BASE_URL, 'marker-icon-2x.png'),
+    iconUrl: joinUrl(LEAFLET_ICON_BASE_URL, 'marker-icon.png'),
+    shadowUrl: joinUrl(LEAFLET_ICON_BASE_URL, 'marker-shadow.png'),
 });
 
 // Define custom icons for waypoint types and user location
@@ -517,17 +631,7 @@ const LoadMapControl = Control.extend({
         dropdown.style.top = '0px';
         dropdown.style.cursor = 'pointer';
 
-        const gpxFiles = [{ name: 'Washington', path: '/gpx/Washington.gpx' }];
-
-        const geojsonFiles = [
-            { name: "Halfmile's WA Trail Notes", path: '/geojson/halfmile/wa.geojson' },
-            { name: 'Washington', path: '/geojson/trail/wa.geojson' },
-            { name: 'Oregon', path: '/geojson/trail/or.geojson' },
-            { name: 'North California', path: '/geojson/trail/nocal.geojson' },
-            { name: 'South California', path: '/geojson/trail/socal.geojson' },
-        ];
-
-        const files = USE_GEOJSON ? geojsonFiles : gpxFiles;
+        const files = dataFiles;
         const loadedLayers: { [key: string]: L.Layer } = {};
 
         const updateMapBounds = () => {
@@ -566,41 +670,35 @@ const LoadMapControl = Control.extend({
             L.DomEvent.on(input, 'change', () => {
                 if (input.checked) {
                     try {
-                        if (USE_GEOJSON) {
-                            fetch(path)
-                                .then((res) => {
-                                    if (!res.ok) throw new Error(`HTTP error ${res.status}`);
-                                    return res.json();
-                                })
-                                .then((data) => {
-                                    const layer = L.geoJSON(data, {
-                                        pointToLayer: (feature, latlng) => {
-                                            if (feature.geometry.type !== 'Point') {
-                                                console.warn('Skipping non-point feature:', feature);
-                                                return null as any; // Type workaround
-                                            }
-                                            if (!feature.properties) {
-                                                console.warn('Feature missing properties:', feature);
-                                                return L.marker(latlng, { icon: iconMap.default });
-                                            }
-                                            const type = getNormalizedType(feature.properties.type);
-                                            const icon = iconMap[type] || iconMap.default;
-                                            return L.marker(latlng, { icon });
-                                        },
-                                        style: { color: '#630000', weight: 4, opacity: 0.7 },
-                                        onEachFeature: (feature, layer) => {
-                                            if (feature.geometry.type !== 'Point' || !feature.properties) {
-                                                console.warn('Skipping popup for invalid feature:', feature);
-                                                return;
-                                            }
-                                            const props = feature.properties;
-                                            const coords = feature.geometry.coordinates;
-                                            const maxDescLength = 200;
-                                            let description = props.description || '';
-                                            if (description.length > maxDescLength) {
-                                                description = description.substring(0, maxDescLength) + '...';
-                                            }
-                                            const initialPopupContent = `
+                        fetchGeoJson(path)
+                            .then((data) => {
+                                const layer = L.geoJSON(data, {
+                                    pointToLayer: (feature, latlng) => {
+                                        if (feature.geometry.type !== 'Point') {
+                                            console.warn('Skipping non-point feature:', feature);
+                                            return null as any; // Type workaround
+                                        }
+                                        if (!feature.properties) {
+                                            console.warn('Feature missing properties:', feature);
+                                            return L.marker(latlng, { icon: iconMap.default });
+                                        }
+                                        const type = getNormalizedType(feature.properties.type);
+                                        const icon = iconMap[type] || iconMap.default;
+                                        return L.marker(latlng, { icon });
+                                    },
+                                    style: { color: '#630000', weight: 4, opacity: 0.7 },
+                                    onEachFeature: (feature, layer) => {
+                                        if (feature.geometry.type !== 'Point' || !feature.properties) {
+                                            return;
+                                        }
+                                        const props = feature.properties;
+                                        const coords = feature.geometry.coordinates;
+                                        const maxDescLength = 200;
+                                        let description = props.description || '';
+                                        if (description.length > maxDescLength) {
+                                            description = description.substring(0, maxDescLength) + '...';
+                                        }
+                                        const initialPopupContent = `
                         <div style="max-width: 250px; font-size: 12px;">
                           <b>${props.name || 'Unnamed Waypoint'}</b><br>
                           <b>Type:</b> ${props.type || 'Unknown'}<br>
@@ -617,10 +715,10 @@ const LoadMapControl = Control.extend({
                           <a href="https://forecast.weather.gov/MapClick.php?lat=${coords[1]?.toFixed(6) || 0}&lon=${coords[0]?.toFixed(6) || 0}" target="_blank">Get More</a>
                         </div>
                       `;
-                                            layer.bindPopup(initialPopupContent);
-                                            layer.on('popupopen', async () => {
-                                                const weatherContent = await fetchWeatherData(coords[1], coords[0]);
-                                                const updatedPopupContent = `
+                                        layer.bindPopup(initialPopupContent);
+                                        layer.on('popupopen', async () => {
+                                            const weatherContent = await fetchWeatherData(coords[1], coords[0]);
+                                            const updatedPopupContent = `
                           <div style="max-width: 250px; font-size: 12px;">
                             <b>${props.name || 'Unnamed Waypoint'}</b><br>
                             <b>Type:</b> ${props.type || 'Unknown'}<br>
@@ -637,36 +735,20 @@ const LoadMapControl = Control.extend({
                             <a href="https://forecast.weather.gov/MapClick.php?lat=${coords[1]?.toFixed(6) || 0}&lon=${coords[0]?.toFixed(6) || 0}" target="_blank">Get More</a>
                           </div>
                         `;
-                                                layer.setPopupContent(updatedPopupContent);
-                                            });
-                                        },
-                                    }).addTo(map);
-                                    loadedLayers[path] = layer;
-                                    map.addLayer(layer);
-                                    updateMapBounds();
-                                })
-                                .catch((error: unknown) => {
-                                    const message = error instanceof Error ? error.message : 'Unknown error';
-                                    console.error('Error loading GeoJSON:', error, path);
-                                    alert(`Error loading GeoJSON file: ${message}`);
-                                    input.checked = false;
-                                });
-                        } else {
-                            new GPX(path, {
-                                async: true,
-                                polyline_options: { color: '#ff0000', weight: 4, opacity: 0.7 },
+                                            layer.setPopupContent(updatedPopupContent);
+                                        });
+                                    },
+                                }).addTo(map);
+                                loadedLayers[path] = layer;
+                                map.addLayer(layer);
+                                updateMapBounds();
                             })
-                                .on('loaded', (e: L.LeafletEvent) => {
-                                    const layer = e.target;
-                                    loadedLayers[path] = layer;
-                                    map.addLayer(layer);
-                                    updateMapBounds();
-                                })
-                                .on('error', (e: any) => {
-                                    alert(`Failed to load GPX file: ${e.message || 'Unknown error'}`);
-                                    input.checked = false;
-                                });
-                        }
+                            .catch((error: unknown) => {
+                                const message = error instanceof Error ? error.message : 'Unknown error';
+                                console.error('Error loading GeoJSON:', error, path);
+                                alert(`Error loading GeoJSON file: ${message}`);
+                                input.checked = false;
+                            });
                     } catch (error: unknown) {
                         const message = error instanceof Error ? error.message : 'Unknown error';
                         console.error('Error loading file:', error, path);

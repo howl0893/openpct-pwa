@@ -32,3 +32,11 @@ dev-dist
 geojson/
 gpx/
 leaflet/
+
+# Commit generated static assets for GitHub Pages while map data is not hosted on S3.
+!public/geojson/
+!public/geojson/**/
+!public/geojson/**/*.geojson
+!public/leaflet/
+!public/leaflet/**/
+!public/leaflet/**/*.png

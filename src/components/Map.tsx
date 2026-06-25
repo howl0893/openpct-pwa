@@ -13,6 +13,7 @@ const HEADING_THRESHOLD = 1; // Minimum heading change (degrees) to update marke
 type DataFile = {
     name: string;
     path: string;
+    group: 'PCTA Trail Data' | 'Halfmile Notes';
 };
 
 const envValue = (key: keyof ImportMetaEnv, fallback: string): string => {
@@ -32,11 +33,12 @@ const configuredDataFile = (
     labelKey: keyof ImportMetaEnv,
     urlKey: keyof ImportMetaEnv,
     fallbackLabel: string,
-    fallbackUrl: string
+    fallbackUrl: string,
+    group: DataFile['group']
 ): DataFile | null => {
     const name = envValue(labelKey, fallbackLabel);
     const path = envValue(urlKey, fallbackUrl);
-    return path ? { name, path } : null;
+    return path ? { name, path, group } : null;
 };
 
 const GEOJSON_BASE_URL = envValue('VITE_OPENPCT_GEOJSON_BASE_URL', '/geojson');
@@ -47,61 +49,71 @@ const dataFiles: DataFile[] = [
         'VITE_OPENPCT_TRAIL_SOCAL_LABEL',
         'VITE_OPENPCT_TRAIL_SOCAL_GEOJSON_URL',
         'PCTA Southern California',
-        joinUrl(GEOJSON_BASE_URL, 'trail/socal.geojson')
+        joinUrl(GEOJSON_BASE_URL, 'trail/socal.geojson'),
+        'PCTA Trail Data'
     ),
     configuredDataFile(
         'VITE_OPENPCT_TRAIL_CENTRAL_LABEL',
         'VITE_OPENPCT_TRAIL_CENTRAL_GEOJSON_URL',
         'PCTA Central California',
-        joinUrl(GEOJSON_BASE_URL, 'trail/central.geojson')
+        joinUrl(GEOJSON_BASE_URL, 'trail/central.geojson'),
+        'PCTA Trail Data'
     ),
     configuredDataFile(
         'VITE_OPENPCT_TRAIL_NOCAL_LABEL',
         'VITE_OPENPCT_TRAIL_NOCAL_GEOJSON_URL',
         'PCTA Northern California',
-        joinUrl(GEOJSON_BASE_URL, 'trail/nocal.geojson')
+        joinUrl(GEOJSON_BASE_URL, 'trail/nocal.geojson'),
+        'PCTA Trail Data'
     ),
     configuredDataFile(
         'VITE_OPENPCT_TRAIL_OR_LABEL',
         'VITE_OPENPCT_TRAIL_OR_GEOJSON_URL',
         'PCTA Oregon',
-        joinUrl(GEOJSON_BASE_URL, 'trail/or.geojson')
+        joinUrl(GEOJSON_BASE_URL, 'trail/or.geojson'),
+        'PCTA Trail Data'
     ),
     configuredDataFile(
         'VITE_OPENPCT_TRAIL_WA_LABEL',
         'VITE_OPENPCT_TRAIL_WA_GEOJSON_URL',
         'PCTA Washington',
-        joinUrl(GEOJSON_BASE_URL, 'trail/wa.geojson')
+        joinUrl(GEOJSON_BASE_URL, 'trail/wa.geojson'),
+        'PCTA Trail Data'
     ),
     configuredDataFile(
         'VITE_OPENPCT_HALFMILE_SOCAL_LABEL',
         'VITE_OPENPCT_HALFMILE_SOCAL_GEOJSON_URL',
         'Halfmile Southern California Notes',
-        joinUrl(GEOJSON_BASE_URL, 'halfmile/socal.geojson')
+        joinUrl(GEOJSON_BASE_URL, 'halfmile/socal.geojson'),
+        'Halfmile Notes'
     ),
     configuredDataFile(
         'VITE_OPENPCT_HALFMILE_CENTRAL_LABEL',
         'VITE_OPENPCT_HALFMILE_CENTRAL_GEOJSON_URL',
         'Halfmile Central California Notes',
-        joinUrl(GEOJSON_BASE_URL, 'halfmile/central.geojson')
+        joinUrl(GEOJSON_BASE_URL, 'halfmile/central.geojson'),
+        'Halfmile Notes'
     ),
     configuredDataFile(
         'VITE_OPENPCT_HALFMILE_NOCAL_LABEL',
         'VITE_OPENPCT_HALFMILE_NOCAL_GEOJSON_URL',
         'Halfmile Northern California Notes',
-        joinUrl(GEOJSON_BASE_URL, 'halfmile/nocal.geojson')
+        joinUrl(GEOJSON_BASE_URL, 'halfmile/nocal.geojson'),
+        'Halfmile Notes'
     ),
     configuredDataFile(
         'VITE_OPENPCT_HALFMILE_OR_LABEL',
         'VITE_OPENPCT_HALFMILE_OR_GEOJSON_URL',
         'Halfmile Oregon Notes',
-        joinUrl(GEOJSON_BASE_URL, 'halfmile/or.geojson')
+        joinUrl(GEOJSON_BASE_URL, 'halfmile/or.geojson'),
+        'Halfmile Notes'
     ),
     configuredDataFile(
         'VITE_OPENPCT_HALFMILE_WA_LABEL',
         'VITE_OPENPCT_HALFMILE_WA_GEOJSON_URL',
         'Halfmile Washington Notes',
-        joinUrl(GEOJSON_BASE_URL, 'halfmile/wa.geojson')
+        joinUrl(GEOJSON_BASE_URL, 'halfmile/wa.geojson'),
+        'Halfmile Notes'
     ),
 ].filter((file): file is DataFile => file !== null);
 
@@ -306,9 +318,9 @@ const LayersControl = Control.extend({
         button.style.borderRadius = '2px';
 
         const dropdown = L.DomUtil.create('div', 'leaflet-control-layers-expanded', container);
-        dropdown.style.minWidth = '150px';
-        dropdown.style.maxWidth = '200px';
-        dropdown.style.padding = '5px';
+        dropdown.style.minWidth = '230px';
+        dropdown.style.maxWidth = '280px';
+        dropdown.style.padding = '8px';
         dropdown.style.fontSize = '14px';
         dropdown.style.lineHeight = '1.5';
         dropdown.style.backgroundColor = '#fff';
@@ -617,9 +629,9 @@ const LoadMapControl = Control.extend({
         button.textContent = 'Load Data';
 
         const dropdown = L.DomUtil.create('div', 'leaflet-control-loadmap-expanded', container);
-        dropdown.style.minWidth = '150px';
-        dropdown.style.maxWidth = '200px';
-        dropdown.style.padding = '5px';
+        dropdown.style.minWidth = '230px';
+        dropdown.style.maxWidth = '280px';
+        dropdown.style.padding = '8px';
         dropdown.style.fontSize = '14px';
         dropdown.style.lineHeight = '1.5';
         dropdown.style.backgroundColor = '#fff';
@@ -649,14 +661,63 @@ const LoadMapControl = Control.extend({
             }
         };
 
-        files.forEach(({ name, path }) => {
-            const label = L.DomUtil.create('label', '', dropdown);
+        const groupContainers: Partial<Record<DataFile['group'], HTMLDivElement>> = {};
+        const groupStates: Partial<Record<DataFile['group'], boolean>> = {};
+        const groups = Array.from(new Set(files.map((file) => file.group)));
+
+        groups.forEach((group, index) => {
+            const expanded = index === 0;
+            groupStates[group] = expanded;
+
+            const header = L.DomUtil.create('button', '', dropdown);
+            header.type = 'button';
+            header.style.width = '100%';
+            header.style.display = 'flex';
+            header.style.alignItems = 'center';
+            header.style.justifyContent = 'space-between';
+            header.style.margin = index === 0 ? '0 0 4px' : '10px 0 4px';
+            header.style.padding = '3px 0';
+            header.style.border = '0';
+            header.style.borderBottom = '1px solid rgba(60, 60, 60, 0.18)';
+            header.style.background = 'transparent';
+            header.style.color = '#333';
+            header.style.cursor = 'pointer';
+            header.style.fontWeight = '700';
+            header.style.fontSize = '12px';
+            header.style.textTransform = 'uppercase';
+            header.style.letterSpacing = '0';
+
+            const title = L.DomUtil.create('span', '', header);
+            title.textContent = group;
+
+            const indicator = L.DomUtil.create('span', '', header);
+            indicator.textContent = expanded ? '-' : '+';
+            indicator.style.fontSize = '14px';
+            indicator.style.lineHeight = '1';
+
+            const groupContent = L.DomUtil.create('div', '', dropdown);
+            groupContent.style.display = expanded ? 'block' : 'none';
+            groupContainers[group] = groupContent;
+
+            L.DomEvent.on(header, 'click', (e: Event) => {
+                L.DomEvent.stopPropagation(e);
+                groupStates[group] = !groupStates[group];
+                const isExpanded = Boolean(groupStates[group]);
+                groupContent.style.display = isExpanded ? 'block' : 'none';
+                indicator.textContent = isExpanded ? '-' : '+';
+            });
+        });
+
+        files.forEach(({ name, path, group }) => {
+            const groupContent = groupContainers[group] || dropdown;
+            const label = L.DomUtil.create('label', '', groupContent);
             label.style.display = 'block';
-            label.style.margin = '2px 0';
+            label.style.margin = '4px 0';
             label.style.whiteSpace = 'nowrap';
             label.style.overflow = 'hidden';
             label.style.textOverflow = 'ellipsis';
             label.style.cursor = 'pointer';
+            label.title = name;
 
             const input = L.DomUtil.create('input', '', label);
             input.type = 'checkbox';

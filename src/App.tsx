@@ -6,7 +6,6 @@ import './App.css';
 
 function App() {
   const [deferredPrompt, setDeferredPrompt] = useState<Event | null>(null);
-  const [isInstallable, setIsInstallable] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
@@ -18,7 +17,6 @@ function App() {
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      setIsInstallable(true);
     };
 
     window.addEventListener('beforeinstallprompt', handler);
@@ -34,13 +32,12 @@ function App() {
     const { outcome } = await (deferredPrompt as any).userChoice;
     console.log(`User response to the install prompt: ${outcome}`);
     setDeferredPrompt(null);
-    setIsInstallable(false);
   };
 
   return (
     <div className="app-container">
       <Navbar
-        isInstallable={isInstallable}
+        isInstallable={deferredPrompt !== null}
         isIOS={isIOS}
         handleInstallClick={handleInstallClick}
       />

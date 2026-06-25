@@ -182,6 +182,8 @@ Verified locally on June 25, 2026:
 ## Notes
 
 - No `.env` file is required for the current local startup path.
+- The committed `public/geojson/**/*.geojson` files are precached by the service worker during PWA install, so installed users can reload and load those map layers offline after the service worker has finished installing.
+- PWA install prompts are browser-controlled. The app always shows an Install button, but Chrome/Edge only show the native prompt when the site is HTTPS, has a valid manifest, has an active service worker, and is not already installed or temporarily dismissed.
 - Browser geolocation requires a secure context. `localhost` and `127.0.0.1` satisfy that requirement during local development.
 - Weather popups call `api.weather.gov`, and feature queries call OpenStreetMap Nominatim, so those features need network access.
 - The PWA service worker is enabled in dev via `vite.config.ts`, so a hard refresh or clearing site data can help if stale local assets appear during testing.

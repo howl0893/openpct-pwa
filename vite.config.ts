@@ -17,16 +17,41 @@ export default defineConfig({
         },
 
         manifest: {
-            name: 'openpct-pwa',
-            short_name: 'openpct',
-            description: 'progressive web app for open PCT data',
+            name: 'OpenPCT',
+            short_name: 'OpenPCT',
+            description: 'Progressive web app for open Pacific Crest Trail data',
+            start_url: '/',
+            scope: '/',
+            display: 'standalone',
+            orientation: 'any',
             theme_color: '#ffffff',
+            background_color: '#ffffff',
+            icons: [
+                {
+                    src: '/pwa-192x192.png',
+                    sizes: '192x192',
+                    type: 'image/png',
+                },
+                {
+                    src: '/pwa-512x512.png',
+                    sizes: '512x512',
+                    type: 'image/png',
+                },
+                {
+                    src: '/maskable-icon-512x512.png',
+                    sizes: '512x512',
+                    type: 'image/png',
+                    purpose: 'maskable',
+                },
+            ],
         },
 
         workbox: {
-            globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
+            globPatterns: ['**/*.{js,css,html,svg,png,ico,json,webmanifest,geojson}'],
+            maximumFileSizeToCacheInBytes: 15 * 1024 * 1024,
             cleanupOutdatedCaches: true,
             clientsClaim: true,
+            skipWaiting: true,
         },
 
         devOptions: {

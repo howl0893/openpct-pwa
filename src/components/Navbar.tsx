@@ -8,24 +8,29 @@ interface NavbarProps {
 }
 
 function Navbar({ isInstallable, isIOS, handleInstallClick }: NavbarProps) {
+  const handleInstall = () => {
+    if (isInstallable) {
+      handleInstallClick();
+      return;
+    }
+
+    if (isIOS) {
+      window.alert('Install OpenPCT from Safari using Share, then Add to Home Screen.');
+      return;
+    }
+
+    window.alert('Install OpenPCT from your browser menu. In Chrome or Edge, use the install icon in the address bar or Install app from the menu.');
+  };
+
   return (
     <nav className="navbar">
       <div className="logo-container">
         <img src={appLogo} className="logo" alt="OpenPCT PWA logo" />
       </div>
       <div className="navbar-actions">
-        {isInstallable && !isIOS && (
-          <button onClick={handleInstallClick} className="install-button">
-            Install
-          </button>
-        )}
-        {isIOS && (
-          <p className="ios-install-message">
-            To install, tap the Share button in Safari and select "Add to Home Screen".
-          </p>
-        )}
-        {/* Placeholder for additional buttons */}
-        {/* Example: <button className="nav-button">Menu</button> */}
+        <button onClick={handleInstall} className="install-button" title="Install OpenPCT">
+          Install
+        </button>
       </div>
     </nav>
   );

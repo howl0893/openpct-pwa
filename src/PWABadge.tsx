@@ -1,6 +1,8 @@
 import './PWABadge.css'
 
 import { useRegisterSW } from 'virtual:pwa-register/react'
+import { useEffect } from 'react'
+import { trackClick, trackScreenView } from './analytics'
 
 function PWABadge() {
   // periodic sync is disabled, change the value to enable it, the period is in milliseconds
@@ -27,9 +29,28 @@ function PWABadge() {
     },
   })
 
+  useEffect(() => {
+    if (needRefresh) {
+      trackScreenView({ screen_name: 'pwa_update_prompt' })
+    }
+  }, [needRefresh])
+
   function close() {
-    
+    trackClick('pwa_update_close_click', {
+      element_name: 'Close',
+      element_type: 'button',
+      element_location: 'pwa_update_prompt',
+    })
     setNeedRefresh(false)
+  }
+
+  function reload() {
+    trackClick('pwa_update_reload_click', {
+      element_name: 'Reload',
+      element_type: 'button',
+      element_location: 'pwa_update_prompt',
+    })
+    void updateServiceWorker(true)
   }
 
   return (
@@ -43,7 +64,7 @@ function PWABadge() {
               
           </div>
           <div className="PWABadge-buttons">
-            <button className="PWABadge-toast-button" onClick={() => updateServiceWorker(true)}>Reload</button>
+            <button className="PWABadge-toast-button" onClick={reload}>Reload</button>
             <button className="PWABadge-toast-button" onClick={() => close()}>Close</button>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import appLogo from '/favicon.svg'; // Adjust path if logo is elsewhere
 import './Navbar.css';
+import { trackClick } from '../analytics';
 
 interface NavbarProps {
   isInstallable: boolean;
@@ -14,6 +15,14 @@ function Navbar({ isInstallable, isIOS, isOffline, handleInstallClick }: NavbarP
       handleInstallClick();
       return;
     }
+
+    trackClick('install_click', {
+      element_name: 'Install',
+      element_type: 'button',
+      element_location: 'navbar',
+      install_prompt_available: false,
+      platform: isIOS ? 'ios' : 'other',
+    });
 
     if (isIOS) {
       window.alert('Install OpenPCT from Safari using Share, then Add to Home Screen.');

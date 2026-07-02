@@ -3,7 +3,7 @@ import Navbar from './components/Navbar.tsx';
 import PWABadge from './PWABadge.tsx';
 import Map from './components/Map.tsx';
 import './App.css';
-import { trackEvent } from './analytics.ts';
+import { trackClick, trackEvent } from './analytics.ts';
 
 function App() {
   const [deferredPrompt, setDeferredPrompt] = useState<Event | null>(null);
@@ -44,6 +44,12 @@ function App() {
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
+    trackClick('install_click', {
+      element_name: 'Install',
+      element_type: 'button',
+      element_location: 'navbar',
+      install_prompt_available: true,
+    });
     (deferredPrompt as any).prompt();
     const { outcome } = await (deferredPrompt as any).userChoice;
     console.log(`User response to the install prompt: ${outcome}`);

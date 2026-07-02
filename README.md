@@ -130,7 +130,9 @@ After DNS resolves, return to GitHub Pages settings and enable **Enforce HTTPS**
 
 ## Google Analytics
 
-Google Analytics 4 is optional. If no measurement ID is configured, the app builds and runs without loading Google Analytics.
+Google Analytics 4 uses public production measurement ID `G-P34VJCTJMV` by
+default. This ID is not a secret. You can override it with a Vite environment
+variable for local or alternate-property testing.
 
 1. In Google Analytics, create a GA4 property and add a web data stream for `https://openpct.com`.
 2. Copy the measurement ID, which looks like `G-XXXXXXXXXX`.
@@ -141,14 +143,20 @@ VITE_OPENPCT_GA_MEASUREMENT_ID=G-XXXXXXXXXX
 VITE_OPENPCT_GA_DEBUG=true
 ```
 
-4. For GitHub Pages, add these repository variables under **Settings > Secrets and variables > Actions > Variables**:
+4. For GitHub Pages, the deployment workflow defaults to the OpenPCT production
+   measurement ID. To override it, add these repository variables under
+   **Settings > Secrets and variables > Actions > Variables**:
 
 ```text
 VITE_OPENPCT_GA_MEASUREMENT_ID=G-XXXXXXXXXX
 VITE_OPENPCT_GA_DEBUG=false
 ```
 
-The implementation tracks only non-sensitive app events: PWA install prompt outcomes, map layer loads by group/region, offline region downloads/clears, and UI hide/show. It does not send GPS coordinates, note text, user-entered data, or custom user identifiers.
+The implementation sends explicit page/screen views and named app events for
+install/update prompts, map controls, layers, downloads, search, annotation,
+location outcomes, weather outbound clicks, and UI hide/show. Search queries are
+included. Events do not include GPS coordinates, note text, cache file paths,
+contact-style user-entered data, or custom user identifiers.
 
 ## Host Map Data On S3
 

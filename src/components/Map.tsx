@@ -10,7 +10,7 @@ import {
     downloadMapDataFiles,
     getMapDataCacheStatus,
 } from '../mapDataCache';
-import { trackEvent } from '../analytics';
+import { trackClick, trackEvent, trackScreenView } from '../analytics';
 
 // Configuration
 const env = import.meta.env;
@@ -448,7 +448,7 @@ const formatHalfmilePopup = (
           <hr>
           <b>Weather:</b><br>
           ${weatherContent}<br>
-          <a href="https://forecast.weather.gov/MapClick.php?lat=${lat.toFixed(6)}&lon=${lon.toFixed(6)}" target="_blank">Get More</a>
+          <a href="https://forecast.weather.gov/MapClick.php?lat=${lat.toFixed(6)}&lon=${lon.toFixed(6)}" target="_blank" data-openpct-weather-more="true">Get More</a>
         </div>
     `;
 };
@@ -959,6 +959,11 @@ const LocationControl = Control.extend({
         L.DomEvent.on(button, 'click', async (e: Event) => {
             console.log('LocationControl: Button clicked');
             L.DomEvent.stopPropagation(e);
+            trackClick('location_click', {
+                element_name: 'Location',
+                element_type: 'button',
+                element_location: 'map_controls',
+            });
             this.onToggleTracking();
             button.style.backgroundColor = button.style.backgroundColor === 'rgb(224, 224, 224)' ? '#fff' : '#e0e0e0';
         });
@@ -1105,6 +1110,12 @@ const AnnotateControl = Control.extend({
         L.DomEvent.on(noteButton, 'click', (e: Event) => {
             L.DomEvent.stopPropagation(e);
             noteMode = !noteMode;
+            trackClick('annotation_note_click', {
+                element_name: 'Note',
+                element_type: 'button',
+                element_location: 'annotation_menu',
+                mode_state: noteMode ? 'enabled' : 'disabled',
+            });
             setModeButtonState(noteButton, noteMode);
             map.getContainer().style.cursor = noteMode ? 'pointer' : 'grab';
         });
@@ -1114,6 +1125,15 @@ const AnnotateControl = Control.extend({
             const mapContainer = map.getContainer();
             const showDrawTools = !mapContainer.classList.contains('openpct-show-draw-tools');
             mapContainer.classList.toggle('openpct-show-draw-tools', showDrawTools);
+            trackClick('annotation_draw_click', {
+                element_name: 'Draw tools',
+                element_type: 'button',
+                element_location: 'annotation_menu',
+                mode_state: showDrawTools ? 'enabled' : 'disabled',
+            });
+            if (showDrawTools) {
+                trackScreenView({ screen_name: 'draw_mode' });
+            }
             setModeButtonState(drawButton, showDrawTools);
         });
 
@@ -1133,6 +1153,12 @@ const AnnotateControl = Control.extend({
                 saveButton.style.padding = '5px 10px';
                 saveButton.style.cursor = 'pointer';
                 L.DomEvent.on(saveButton, 'click', () => {
+                    trackClick('annotation_save_click', {
+                        element_name: 'Save Note',
+                        element_type: 'button',
+                        element_location: 'annotation_popup',
+                        has_note_text: textarea.value.trim().length > 0,
+                    });
                     marker.note = textarea.value;
                     marker.bindPopup(`<b>Note:</b><br>${marker.note || 'No note added.'}`).closePopup();
                     marker.openPopup();
@@ -1150,7 +1176,17 @@ const AnnotateControl = Control.extend({
 
         L.DomEvent.on(button, 'click', (e: Event) => {
             L.DomEvent.stopPropagation(e);
-            dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+            const isOpen = dropdown.style.display === 'none';
+            dropdown.style.display = isOpen ? 'block' : 'none';
+            trackClick('annotation_menu_toggle', {
+                element_name: 'Annotate',
+                element_type: 'button',
+                element_location: 'map_controls',
+                panel_state: isOpen ? 'open' : 'closed',
+            });
+            if (isOpen) {
+                trackScreenView({ screen_name: 'annotation_menu' });
+            }
         });
 
         L.DomEvent.on(container, 'click', L.DomEvent.stopPropagation);
@@ -1208,7 +1244,14 @@ const UiToggleControl = Control.extend({
         };
 
         const toggleHidden = () => {
-            setHidden(!document.body.classList.contains('openpct-ui-hidden'));
+            const nextHidden = !document.body.classList.contains('openpct-ui-hidden');
+            trackClick('ui_toggle_click', {
+                element_name: nextHidden ? 'Hide controls' : 'Show controls',
+                element_type: 'button',
+                element_location: 'map_controls',
+                ui_state: nextHidden ? 'hidden' : 'shown',
+            });
+            setHidden(nextHidden);
         };
 
         setHidden(document.body.classList.contains('openpct-ui-hidden'), false);
@@ -1359,6 +1402,12 @@ const LayersControl = Control.extend({
                     if (map.hasLayer(layer)) map.removeLayer(layer);
                 });
                 map.addLayer(layer);
+                trackClick('layer_base_select', {
+                    element_name: name,
+                    element_type: 'radio',
+                    element_location: 'layers_panel',
+                    base_layer: name,
+                });
                 writeLayerPreferences({
                     ...(readLayerPreferences() || {}),
                     baseLayer: name as BaseLayerName,
@@ -1434,6 +1483,7 @@ const LayersControl = Control.extend({
                         loadedLayers[path] = layer;
                         layer.addTo(map);
                         trackEvent('map_layer_loaded', {
+                            layer_name: dataFile.name,
                             layer_group: group,
                             region,
                         });
@@ -1494,6 +1544,14 @@ const LayersControl = Control.extend({
             span.style.textOverflow = 'ellipsis';
 
             L.DomEvent.on(input, 'change', () => {
+                trackClick('layer_overlay_toggle', {
+                    element_name: name,
+                    element_type: 'checkbox',
+                    element_location: 'layers_panel',
+                    layer_group: group,
+                    region: file.region,
+                    checked: input.checked,
+                });
                 persistVisibleLayers();
                 if (input.checked) {
                     loadOverlay(file, input);
@@ -1542,7 +1600,17 @@ const LayersControl = Control.extend({
 
         L.DomEvent.on(button, 'click', (e: Event) => {
             L.DomEvent.stopPropagation(e);
-            dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+            const isOpen = dropdown.style.display === 'none';
+            dropdown.style.display = isOpen ? 'block' : 'none';
+            trackClick('layers_panel_toggle', {
+                element_name: 'Layers',
+                element_type: 'button',
+                element_location: 'map_controls',
+                panel_state: isOpen ? 'open' : 'closed',
+            });
+            if (isOpen) {
+                trackScreenView({ screen_name: 'layers_panel' });
+            }
         });
 
         L.DomEvent.on(container, 'click', L.DomEvent.stopPropagation);
@@ -1604,6 +1672,8 @@ const SearchControl = Control.extend({
             resultsContainer.style.left = '0';
             resultsContainer.style.right = 'auto';
         }
+        let hasTrackedFocus = false;
+        let lastTrackedResultsQuery = '';
 
         const hideResults = () => {
             resultsContainer.style.display = 'none';
@@ -1638,7 +1708,15 @@ const SearchControl = Control.extend({
             }
 
             resultsContainer.innerHTML = '';
-            results.forEach(({ feature }) => {
+            if (lastTrackedResultsQuery !== query) {
+                trackScreenView({
+                    screen_name: 'search_results',
+                    search_query: query,
+                    result_count: results.length,
+                });
+                lastTrackedResultsQuery = query;
+            }
+            results.forEach(({ feature }, index) => {
                 const row = L.DomUtil.create('button', '', resultsContainer);
                 row.type = 'button';
                 row.style.display = 'block';
@@ -1665,6 +1743,17 @@ const SearchControl = Control.extend({
 
                 L.DomEvent.on(row, 'click', (event: Event) => {
                     L.DomEvent.stopPropagation(event);
+                    trackClick('search_result_click', {
+                        element_name: feature.title,
+                        element_type: 'button',
+                        element_location: 'search_results',
+                        search_query: query,
+                        result_rank: index + 1,
+                        result_name: feature.title,
+                        result_type: feature.subtitle || feature.group,
+                        layer_group: feature.group,
+                        region: feature.region,
+                    });
                     hideResults();
                     input.blur();
                     openIndexedFeature(map, feature);
@@ -1674,11 +1763,32 @@ const SearchControl = Control.extend({
         };
 
         L.DomEvent.on(input, 'input', renderResults);
-        L.DomEvent.on(input, 'focus', renderResults);
+        L.DomEvent.on(input, 'focus', () => {
+            if (!hasTrackedFocus) {
+                trackEvent('search_focus', {
+                    element_name: 'Search',
+                    element_type: 'input',
+                    element_location: navbarSearchSlot ? 'navbar' : 'map_controls',
+                });
+                hasTrackedFocus = true;
+            }
+            renderResults();
+        });
         L.DomEvent.on(input, 'keydown', (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
                 hideResults();
                 input.blur();
+                return;
+            }
+            if (event.key === 'Enter') {
+                const query = input.value.trim();
+                if (query) {
+                    const results = searchEnabledFeatures(query);
+                    trackEvent('search_submit', {
+                        search_query: query,
+                        result_count: results.length,
+                    });
+                }
             }
         });
 
@@ -1895,11 +2005,23 @@ const DownloadsControl = Control.extend({
                 L.DomEvent.stopPropagation(e);
                 const statuses = await getMapDataCacheStatus(regionPaths);
                 if (arePathsDownloaded(regionPaths, statuses)) {
+                    trackClick('offline_region_clear_click', {
+                        element_name: region.name,
+                        element_type: 'button',
+                        element_location: 'downloads_panel',
+                        region: region.key,
+                    });
                     if (await clearPaths(regionPaths, status)) {
                         trackEvent('offline_region_cleared', { region: region.key });
                     }
                     return;
                 }
+                trackClick('offline_region_download_click', {
+                    element_name: region.name,
+                    element_type: 'button',
+                    element_location: 'downloads_panel',
+                    region: region.key,
+                });
                 if (await downloadPaths(regionPaths, status)) {
                     trackEvent('offline_region_downloaded', { region: region.key });
                 }
@@ -1917,7 +2039,17 @@ const DownloadsControl = Control.extend({
 
         L.DomEvent.on(button, 'click', (e: Event) => {
             L.DomEvent.stopPropagation(e);
-            dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+            const isOpen = dropdown.style.display === 'none';
+            dropdown.style.display = isOpen ? 'block' : 'none';
+            trackClick('downloads_panel_toggle', {
+                element_name: 'Downloads',
+                element_type: 'button',
+                element_location: 'map_controls',
+                panel_state: isOpen ? 'open' : 'closed',
+            });
+            if (isOpen) {
+                trackScreenView({ screen_name: 'downloads_panel' });
+            }
         });
 
         L.DomEvent.on(container, 'click', L.DomEvent.stopPropagation);
@@ -1951,6 +2083,7 @@ const Map = () => {
     const [isTracking, setIsTracking] = useState(false);
     const watchId = useRef<number | null>(null);
     const hasIMU = useRef<boolean>('DeviceOrientationEvent' in window);
+    const locationSuccessTracked = useRef(false);
 
     console.log('Map: Component initialized, hasIMU:', hasIMU.current);
 
@@ -1986,6 +2119,12 @@ const Map = () => {
             timestamp: position.timestamp,
         });
         const { latitude, longitude, heading } = position.coords;
+        if (!locationSuccessTracked.current) {
+            trackEvent('location_success', {
+                has_heading: heading !== null,
+            });
+            locationSuccessTracked.current = true;
+        }
         const timestamp = position.timestamp;
         setUserLocation((prev) => {
             const newHeading = heading !== null ? heading : prev?.heading || 0;
@@ -2000,8 +2139,19 @@ const Map = () => {
     // Handle geolocation errors
     const handleGeolocationError = (error: GeolocationPositionError) => {
         console.error('Geolocation: Error', { code: error.code, message: error.message });
+        trackEvent('location_failure', {
+            reason:
+                error.code === error.PERMISSION_DENIED
+                    ? 'permission_denied'
+                    : error.code === error.POSITION_UNAVAILABLE
+                        ? 'position_unavailable'
+                        : error.code === error.TIMEOUT
+                            ? 'timeout'
+                            : 'unknown',
+        });
         setIsTracking(false);
         setUserLocation(null);
+        locationSuccessTracked.current = false;
         if (userMarker.current && map.current) {
             map.current.removeLayer(userMarker.current);
             userMarker.current = null;
@@ -2047,12 +2197,14 @@ const Map = () => {
         console.log('startTracking: Initiating');
         if (!window.isSecureContext) {
             console.error('startTracking: Secure context required');
+            trackEvent('location_failure', { reason: 'insecure_context' });
             alert('Geolocation requires a secure context (HTTPS or localhost).');
             setIsTracking(false);
             return;
         }
         if (!navigator.geolocation) {
             console.error('startTracking: Geolocation not supported');
+            trackEvent('location_failure', { reason: 'unsupported' });
             alert('Geolocation is not supported by this browser.');
             setIsTracking(false);
             return;
@@ -2063,6 +2215,7 @@ const Map = () => {
                 console.log('startTracking: Geolocation permission state', geoPermission.state);
                 if (geoPermission.state === 'denied') {
                     console.error('startTracking: Geolocation permission denied');
+                    trackEvent('location_failure', { reason: 'permission_denied' });
                     alert('Location access is denied. Please enable location services.');
                     setIsTracking(false);
                     return;
@@ -2086,6 +2239,7 @@ const Map = () => {
         }
 
         console.log('startTracking: Starting watchPosition');
+        locationSuccessTracked.current = false;
         watchId.current = navigator.geolocation.watchPosition(
             handleGeolocation,
             handleGeolocationError,
@@ -2115,6 +2269,7 @@ const Map = () => {
         }
         setIsTracking(false);
         setUserLocation(null);
+        locationSuccessTracked.current = false;
         if (userMarker.current && map.current) {
             map.current.removeLayer(userMarker.current);
             userMarker.current = null;
@@ -2178,6 +2333,7 @@ const Map = () => {
                 zoomControl: false,
                 doubleClickZoom: false,
             });
+            trackScreenView({ screen_name: 'map' });
 
             if (map.current) {
                 map.current.addControl(new L.Control.Zoom({ position: 'topright' }));
@@ -2218,6 +2374,9 @@ const Map = () => {
                     const layer = event.layer as L.Layer;
                     const featureId = L.stamp(layer);
                     drawnItems.current.addLayer(layer);
+                    trackEvent('draw_feature_created', {
+                        feature_type: event.layerType || 'unknown',
+                    });
                     setDrawnFeatures((prev) => [...prev, featureId]);
                 });
 
@@ -2227,7 +2386,25 @@ const Map = () => {
                     (event.layers as L.LayerGroup).eachLayer((layer: L.Layer) => {
                         deletedFeatureIds.push(L.stamp(layer));
                     });
+                    trackEvent('draw_feature_deleted', {
+                        deleted_count: deletedFeatureIds.length,
+                    });
                     setDrawnFeatures((prev) => prev.filter((id) => !deletedFeatureIds.includes(id)));
+                });
+
+                map.current.on('popupopen', (event: L.PopupEvent) => {
+                    const popupElement = event.popup.getElement();
+                    const weatherLink = popupElement?.querySelector<HTMLAnchorElement>('a[data-openpct-weather-more="true"]');
+                    if (!weatherLink) return;
+                    L.DomEvent.on(weatherLink, 'click', () => {
+                        trackClick('weather_more_click', {
+                            element_name: 'Get More',
+                            element_type: 'link',
+                            element_location: 'weather_popup',
+                            destination: 'https://forecast.weather.gov/',
+                            outbound: true,
+                        });
+                    });
                 });
 
                 map.current.on('dblclick', (e: L.LeafletMouseEvent) => {
@@ -2283,6 +2460,12 @@ const Map = () => {
 
     const showControls = () => {
         document.body.classList.remove('openpct-ui-hidden');
+        trackClick('ui_toggle_click', {
+            element_name: 'Show controls',
+            element_type: 'button',
+            element_location: 'hidden_ui',
+            ui_state: 'shown',
+        });
         trackEvent('ui_shown');
     };
 
